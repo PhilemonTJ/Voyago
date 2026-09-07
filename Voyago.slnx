@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Voyago.AppHost/Voyago.AppHost.csproj" />
+  <Project Path="Voyago.BookingService/Voyago.BookingService.csproj" />
+  <Project Path="Voyago.BusService/Voyago.BusService.csproj" />
+  <Project Path="Voyago.ServiceDefaults/Voyago.ServiceDefaults.csproj" />
+  <Project Path="Voyago.Shared.Contracts/Voyago.Shared.Contracts.csproj" />
+  <Project Path="Voyago.UserService/Voyago.UserService.csproj" />
+</Solution>

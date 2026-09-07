@@ -1,0 +1,6 @@
+@Voyago.BookingService_HostAddress = http://localhost:5217
+
+GET {{Voyago.BookingService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
