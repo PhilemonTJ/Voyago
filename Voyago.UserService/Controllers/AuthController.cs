@@ -1,8 +1,7 @@
-﻿using Microsoft.AspNetCore.Identity.Data;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Voyago.UserService.DTOs.Auth;
 using Voyago.UserService.DTOs.Users;
-using Voyago.UserService.Services;
+using Voyago.UserService.Services.Interfaces;
 
 namespace Voyago.UserService.Controllers;
 

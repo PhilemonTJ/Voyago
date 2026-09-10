@@ -4,6 +4,7 @@ using Voyago.UserService.Data;
 using Voyago.UserService.DTOs.Auth;
 using Voyago.UserService.DTOs.Users;
 using Voyago.UserService.Models;
+using Voyago.UserService.Services.Interfaces;
 
 namespace Voyago.UserService.Services;
 
@@ -11,11 +12,13 @@ public class AuthService : IAuthService
 {
     private readonly UserDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
+    private readonly IJwtService _jwtService;
 
-    public AuthService(UserDbContext db, IPasswordHasher<User> passwordHasher)
+    public AuthService(UserDbContext db, IPasswordHasher<User> passwordHasher, IJwtService jwtService)
     {
         _db = db;
         _passwordHasher = passwordHasher;
+        _jwtService = jwtService;
     }
 
     public async Task<UserResponseDto> RegisterAsync(RegisterRequestDto request)
@@ -83,13 +86,16 @@ public class AuthService : IAuthService
             return null;
         }
 
+        var accessToken = _jwtService.GenerateAccessToken(user);
+
         return new LoginResponseDto
         {
             Id = user.Id,
             FirstName = user.FirstName,
             LastName = user.LastName,
             Email = user.Email,
-            Role = user.Role
+            Role = user.Role,
+            AccessToken = accessToken,
         };
     }
 }
