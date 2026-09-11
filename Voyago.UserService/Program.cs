@@ -21,7 +21,7 @@ builder.Services
     .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
     .Validate(
         settings => !string.IsNullOrWhiteSpace(settings.Issuer),
-        "Jwt Issuer is required.")
+        "JWT Issuer is required.")
     .Validate(
         settings => !string.IsNullOrWhiteSpace(settings.Audience),
         "JWT Audience is required.")
@@ -30,7 +30,7 @@ builder.Services
         "JWT SecretKey is required.")
     .Validate(
         settings => settings.AccessTokenExpirationMinutes > 0,
-        "JWT access tokens expiration must be greater than 0")
+        "JWT access token expiration must be greater than 0.")
     .ValidateOnStart();
 
 builder.Services
@@ -40,13 +40,14 @@ builder.Services
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"], 
+            ValidIssuer = jwtSettings.Issuer,
 
             ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
+            ValidAudience = jwtSettings.Audience,
 
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings.SecretKey)),
 
             ValidateLifetime = true,
 
@@ -60,19 +61,42 @@ builder.AddNpgsqlDbContext<UserDbContext>(connectionName: "userdb");
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<IUserService, UserService>();
+
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter());
     });
 
 builder.Services.AddOpenApi();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition(
+        "Bearer",
+        new Microsoft.OpenApi.OpenApiSecurityScheme
+        {
+            Name = "Authorization",
+            Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+            Scheme = "bearer",
+            BearerFormat = "JWT",
+            In = Microsoft.OpenApi.ParameterLocation.Header,
+            Description = "Enter your JWT access token."
+        });
+
+    options.AddSecurityRequirement(
+        document => new Microsoft.OpenApi.OpenApiSecurityRequirement
+        {
+            [new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", document)] =
+                new List<string>()
+        });
+});
 
 var app = builder.Build();
 

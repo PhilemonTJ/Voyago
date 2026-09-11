@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Voyago.UserService.DTOs.Users;
+using Voyago.UserService.Services.Interfaces;
 
 namespace Voyago.UserService.Controllers;
 
@@ -8,17 +10,31 @@ namespace Voyago.UserService.Controllers;
 [Route("api/users")]
 public class UsersController : ControllerBase
 {
+    private readonly IUserService _userService;
+
+    public UsersController(IUserService userService)
+    {
+        _userService = userService;
+    }
+
     [Authorize]
     [HttpGet("me")]
-    public IActionResult GetMe()
+    public async Task<ActionResult<UserResponseDto>> GetMe() 
     {
-        return Ok(new
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!Guid.TryParse(userIdClaim, out var userId))
         {
-            message = "You are authenticated.",
-            userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value,
-            email = User.FindFirst(ClaimTypes.Email)?.Value,
-            name = User.Identity?.Name,
-            role = User.FindFirst(ClaimTypes.Role)?.Value
-        });
+            return Unauthorized();
+        }
+
+        var user = await _userService.GetCurrentUserAsync(userId);
+
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(user);
     }
 }
