@@ -68,4 +68,21 @@ public class AuthController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(RefreshTokenRequestDto request)
+    {
+        var result =
+            await _authService.LogoutAsync(request);
+
+        if (!result)
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid or already revoked refresh token."
+            });
+        }
+
+        return NoContent();
+    }
 }

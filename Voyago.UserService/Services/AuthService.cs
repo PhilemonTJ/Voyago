@@ -197,4 +197,34 @@ public class AuthService : IAuthService
             RefreshToken = newRefreshToken
         };
     }
+
+    public async Task<bool> LogoutAsync(RefreshTokenRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        {
+            return false;
+        }
+
+        var tokenHash = _refreshTokenService.HashToken(request.RefreshToken);
+
+        var refreshToken = await _db.RefreshTokens
+            .FirstOrDefaultAsync(token =>
+                token.TokenHash == tokenHash);
+
+        if (refreshToken is null)
+        {
+            return false;
+        }
+
+        if (refreshToken.RevokedAt is not null)
+        {
+            return false;
+        }
+
+        refreshToken.RevokedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return true;
+    }
 }
