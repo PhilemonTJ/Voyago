@@ -12,6 +12,8 @@ public class UserDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -51,6 +53,32 @@ public class UserDbContext : DbContext
 
             entity.HasIndex(user => user.Email)
                 .IsUnique();
+        });
+
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(token => token.Id);
+
+            entity.Property(token => token.TokenHash)
+                .IsRequired();
+
+            entity.Property(token => token.ExpiresAt)
+                .IsRequired();
+
+            entity.Property(token => token.CreatedAt)
+                .IsRequired();
+
+            entity.Property(token => token.RevokedAt);
+
+            entity.HasIndex(token => token.UserId);
+
+            entity.HasIndex(token => token.TokenHash)
+                .IsUnique();
+
+            entity.HasOne(token => token.User)
+                .WithMany(user => user.RefreshTokens)
+                .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

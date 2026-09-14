@@ -31,6 +31,9 @@ builder.Services
     .Validate(
         settings => settings.AccessTokenExpirationMinutes > 0,
         "JWT access token expiration must be greater than 0.")
+    .Validate(
+        settings => settings.RefreshTokenExpirationDays > 0,
+        "JWT refresh token expiration must be greater than 0.")
     .ValidateOnStart();
 
 builder.Services
@@ -62,6 +65,7 @@ builder.AddNpgsqlDbContext<UserDbContext>(connectionName: "userdb");
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 

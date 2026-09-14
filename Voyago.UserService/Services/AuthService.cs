@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Voyago.UserService.Configuration;
 using Voyago.UserService.Data;
 using Voyago.UserService.DTOs.Auth;
 using Voyago.UserService.DTOs.Users;
@@ -13,12 +15,21 @@ public class AuthService : IAuthService
     private readonly UserDbContext _db;
     private readonly IPasswordHasher<User> _passwordHasher;
     private readonly IJwtService _jwtService;
+    private readonly JwtSettings _jwtSettings;
+    private readonly IRefreshTokenService _refreshTokenService;
 
-    public AuthService(UserDbContext db, IPasswordHasher<User> passwordHasher, IJwtService jwtService)
+    public AuthService(
+        UserDbContext db, 
+        IPasswordHasher<User> passwordHasher, 
+        IJwtService jwtService,
+        IOptions<JwtSettings> jwtSettings,
+        IRefreshTokenService refreshTokenService)
     {
         _db = db;
         _passwordHasher = passwordHasher;
         _jwtService = jwtService;
+        _jwtSettings = jwtSettings.Value;
+        _refreshTokenService = refreshTokenService;
     }
 
     public async Task<UserResponseDto> RegisterAsync(RegisterRequestDto request)
@@ -88,6 +99,22 @@ public class AuthService : IAuthService
 
         var accessToken = _jwtService.GenerateAccessToken(user);
 
+        var refreshToken = _refreshTokenService.GenerateToken();
+
+        var refreshTokenHash = _refreshTokenService.HashToken(refreshToken);
+
+        var refreshTokenEntity = new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = refreshTokenHash,
+            CreatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays),
+        };
+
+        _db.RefreshTokens.Add(refreshTokenEntity);
+
+        await _db.SaveChangesAsync();
+
         return new LoginResponseDto
         {
             Id = user.Id,
@@ -96,6 +123,78 @@ public class AuthService : IAuthService
             Email = user.Email,
             Role = user.Role,
             AccessToken = accessToken,
+            RefreshToken = refreshToken,
+        };
+    }
+
+    public async Task<LoginResponseDto?> RefreshTokenAsync(RefreshTokenRequestDto request)
+    {
+        if (string.IsNullOrWhiteSpace(request.RefreshToken))
+        {
+            return null;
+        }
+
+        var tokenHash = _refreshTokenService.HashToken(request.RefreshToken);
+
+        var refreshToken = await _db.RefreshTokens
+            .FirstOrDefaultAsync(token =>
+                token.TokenHash == tokenHash);
+
+        if (refreshToken is null)
+        {
+            return null;
+        }
+
+        if (refreshToken.RevokedAt is not null)
+        {
+            return null;
+        }
+
+        if (refreshToken.ExpiresAt <= DateTimeOffset.UtcNow)
+        {
+            return null;
+        }
+
+        var user = await _db.Users
+            .FirstOrDefaultAsync(user =>
+                user.Id == refreshToken.UserId &&
+                user.DeletedAt == null);
+
+        if (user is null)
+        {
+            return null;
+        }
+
+        refreshToken.RevokedAt = DateTimeOffset.UtcNow;
+
+        var newRefreshToken = _refreshTokenService.GenerateToken();
+
+        var newRefreshTokenHash = _refreshTokenService.HashToken(newRefreshToken);
+
+        var newRefreshTokenEntity = new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = newRefreshTokenHash,
+            CreatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays)
+        };
+
+        var accessToken = _jwtService.GenerateAccessToken(user);
+
+        _db.RefreshTokens.Add(newRefreshTokenEntity);
+
+        await _db.SaveChangesAsync();
+
+        return new LoginResponseDto
+        {
+            Id = user.Id,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            Email = user.Email,
+            Role = user.Role,
+            AccessToken = accessToken,
+            RefreshToken = newRefreshToken
         };
     }
 }

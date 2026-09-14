@@ -53,4 +53,19 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPost("refresh")]
+    public async Task<ActionResult<LoginResponseDto>> Refresh(RefreshTokenRequestDto request)
+    {
+        var result = await _authService.RefreshTokenAsync(request);
+
+        if (result is null)
+        {
+            return Unauthorized(new
+            {
+                message = "Invalid or expired refresh token."
+            });
+        }
+
+        return Ok(result);
+    }
 }
