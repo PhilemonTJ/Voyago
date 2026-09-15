@@ -14,6 +14,8 @@ public class UserDbContext : DbContext
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<OperatorProfile> OperatorProfiles => Set<OperatorProfile>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<User>(entity =>
@@ -78,6 +80,38 @@ public class UserDbContext : DbContext
             entity.HasOne(token => token.User)
                 .WithMany(user => user.RefreshTokens)
                 .HasForeignKey(token => token.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<OperatorProfile>(entity =>
+        {
+            entity.HasKey(profile => profile.Id);
+
+            entity.Property(profile => profile.CompanyName)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            entity.Property(profile => profile.Description);
+
+            entity.Property(profile => profile.ContactNumber)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(profile => profile.Address);
+
+            entity.Property(profile => profile.LogoImageUrl);
+
+            entity.Property(profile => profile.CreatedAt)
+                .IsRequired();
+
+            entity.Property(profile => profile.UpdatedAt);
+
+            entity.HasIndex(profile => profile.UserId)
+                .IsUnique();
+
+            entity.HasOne(profile => profile.User)
+                .WithOne(user => user.OperatorProfile)
+                .HasForeignKey<OperatorProfile>(profile => profile.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

@@ -33,4 +33,6 @@ public class User
     public DateTimeOffset? DeletedAt { get; set; }
 
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+    public OperatorProfile? OperatorProfile { get; set; }
 }
