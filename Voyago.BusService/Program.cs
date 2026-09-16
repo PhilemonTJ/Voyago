@@ -1,4 +1,7 @@
+using System.Text.Json.Serialization;
 using Voyago.BusService.Data;
+using Voyago.BusService.Services;
+using Voyago.BusService.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,7 +11,15 @@ builder.AddNpgsqlDbContext<BusDbContext>(connectionName: "busdb");
 
 builder.Services.AddProblemDetails();
 
-builder.Services.AddControllers();
+builder.Services.AddScoped<IBusService, BusService>();
+
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(
+            new JsonStringEnumConverter());
+    });
 
 builder.Services.AddOpenApi();
 
