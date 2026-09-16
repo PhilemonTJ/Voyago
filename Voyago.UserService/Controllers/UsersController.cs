@@ -25,14 +25,20 @@ public class UsersController : ControllerBase
 
         if (!Guid.TryParse(userIdClaim, out var userId))
         {
-            return Unauthorized();
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Invalid user identity.");
         }
 
         var user = await _userService.GetCurrentUserAsync(userId);
 
         if (user is null)
         {
-            return NotFound();
+            return Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Not Found",
+                detail: "User not found.");
         }
 
         return Ok(user);

@@ -60,6 +60,8 @@ builder.Services
 
 builder.AddServiceDefaults();
 
+builder.Services.AddProblemDetails();
+
 builder.AddNpgsqlDbContext<UserDbContext>(connectionName: "userdb");
 
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -105,6 +107,8 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 app.MapDefaultEndpoints();
 

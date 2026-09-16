@@ -23,17 +23,20 @@ public class OperatorProfilesController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId))
         {
-            return Unauthorized();
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to determine the current user.");
         }
 
         var profile = await _operatorProfileService.GetMyProfileAsync(userId);
 
         if (profile is null)
         {
-            return NotFound(new
-            {
-                message = "Operator profile not found."
-            });
+            return Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Not Found",
+                detail: "Operator profile not found.");
         }
 
         return Ok(profile);
@@ -44,23 +47,33 @@ public class OperatorProfilesController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId))
         {
-            return Unauthorized();
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to determine the current user.");
         }
 
         try
         {
-            var profile = await _operatorProfileService.CreateAsync(userId,request);
+            var profile = await _operatorProfileService.CreateAsync(userId, request);
 
             return CreatedAtAction(
                 nameof(GetMyProfile),
                 profile);
         }
+        catch (ArgumentException ex)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Bad Request",
+                detail: ex.Message);
+        }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new
-            {
-                message = ex.Message
-            });
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Conflict",
+                detail: ex.Message);
         }
     }
 
@@ -69,20 +82,33 @@ public class OperatorProfilesController : ControllerBase
     {
         if (!TryGetCurrentUserId(out var userId))
         {
-            return Unauthorized();
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Unable to determine the current user.");
         }
 
-        var profile = await _operatorProfileService.UpdateAsync(userId, request);
-
-        if (profile is null)
+        try
         {
-            return NotFound(new
-            {
-                message = "Operator profile not found."
-            });
-        }
+            var profile = await _operatorProfileService.UpdateAsync(userId, request);
 
-        return Ok(profile);
+            if (profile is null)
+            {
+                return Problem(
+                    statusCode: StatusCodes.Status404NotFound,
+                    title: "Not Found",
+                    detail: "Operator profile not found.");
+            }
+
+            return Ok(profile);
+        }
+        catch (ArgumentException ex)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "Bad Request",
+                detail: ex.Message);
+        }
     }
 
     private bool TryGetCurrentUserId(out Guid userId)

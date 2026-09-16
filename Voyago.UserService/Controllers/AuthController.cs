@@ -30,10 +30,10 @@ public class AuthController : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return Conflict(new
-            {
-                message = ex.Message
-            });
+            return Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Conflict",
+                detail: ex.Message);
         }
     }
 
@@ -44,10 +44,10 @@ public class AuthController : ControllerBase
 
         if (result is null)
         {
-            return Unauthorized(new
-            {
-                message = "Invalid email or password."
-            });
+            return Problem(
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Unauthorized",
+                detail: "Invalid email or password.");
         }
 
         return Ok(result);
@@ -60,10 +60,10 @@ public class AuthController : ControllerBase
 
         if (result is null)
         {
-            return Unauthorized(new
-            {
-                message = "Invalid or expired refresh token."
-            });
+            return Problem(
+                 statusCode: StatusCodes.Status401Unauthorized,
+                 title: "Unauthorized",
+                 detail: "Invalid or expired refresh token.");
         }
 
         return Ok(result);
@@ -77,10 +77,10 @@ public class AuthController : ControllerBase
 
         if (!result)
         {
-            return Unauthorized(new
-            {
-                message = "Invalid or already revoked refresh token."
-            });
+            return Problem(
+               statusCode: StatusCodes.Status401Unauthorized,
+               title: "Unauthorized",
+               detail: "Invalid or already revoked refresh token.");
         }
 
         return NoContent();
