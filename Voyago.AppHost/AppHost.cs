@@ -8,12 +8,15 @@ var postgres = builder.AddPostgres("postgres", password: postgresPassword)
     .WithLifetime(ContainerLifetime.Persistent);
 
 var userDb = postgres.AddDatabase("userdb");
+var busDb = postgres.AddDatabase("busdb");
 
 var userService = builder.AddProject<Projects.Voyago_UserService>("user-service")
     .WithReference(userDb)
     .WaitFor(userDb);
 
-var busService = builder.AddProject<Projects.Voyago_BusService>("bus-service");
+var busService = builder.AddProject<Projects.Voyago_BusService>("bus-service")
+    .WithReference(busDb)
+    .WaitFor(busDb);
 
 var bookingService = builder.AddProject<Projects.Voyago_BookingService>("booking-service");
 
