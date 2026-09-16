@@ -34,4 +34,6 @@ public class Bus
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    public ICollection<Seat> Seats { get; set; } = new List<Seat>();
 }

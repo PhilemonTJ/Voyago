@@ -60,5 +60,41 @@ public class BusDbContext : DbContext
 
             entity.HasIndex(bus => bus.OperatorId);
         });
+
+        modelBuilder.Entity<Seat>(entity =>
+        {
+            entity.HasKey(seat => seat.Id);
+
+            entity.Property(seat => seat.SeatNumber)
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(seat => seat.SeatType)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(seat => seat.RowNumber)
+                .IsRequired();
+
+            entity.Property(seat => seat.ColumnNumber)
+                .IsRequired();
+
+            entity.Property(seat => seat.IsActive)
+                .IsRequired();
+
+            entity.HasIndex(
+                    seat => new
+                    {
+                        seat.BusId,
+                        seat.SeatNumber
+                    })
+                .IsUnique();
+
+            entity.HasOne(seat => seat.Bus)
+                .WithMany(bus => bus.Seats)
+                .HasForeignKey(seat => seat.BusId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }
