@@ -23,5 +23,11 @@ public class CreateBusRequestDto
     [Range(1, 200)]
     public int TotalSeats { get; set; }
 
+    [Range(1, 100)]
+    public int TotalRows { get; set; }
+
+    [Range(1, 20)]
+    public int TotalColumns { get; set; }
+
     public string? ImageUrl { get; set; }
 }

@@ -18,6 +18,10 @@ public class BusResponseDto
 
     public int TotalSeats { get; set; }
 
+    public int TotalRows { get; set; }
+
+    public int TotalColumns { get; set; }
+
     public string? ImageUrl { get; set; }
 
     public bool IsActive { get; set; }

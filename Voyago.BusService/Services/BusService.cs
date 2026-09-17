@@ -46,6 +46,8 @@ public class BusService : IBusService
             BusName = request.BusName,
             BusType = request.BusType,
             TotalSeats = request.TotalSeats,
+            TotalRows = request.TotalRows,
+            TotalColumns = request.TotalColumns,
             ImageUrl = request.ImageUrl,
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
@@ -71,6 +73,8 @@ public class BusService : IBusService
                 BusName = bus.BusName,
                 BusType = bus.BusType,
                 TotalSeats = bus.TotalSeats,
+                TotalRows = bus.TotalRows,
+                TotalColumns = bus.TotalColumns,
                 ImageUrl = bus.ImageUrl,
                 IsActive = bus.IsActive,
                 CreatedAt = bus.CreatedAt,
@@ -93,6 +97,8 @@ public class BusService : IBusService
                 BusName = bus.BusName,
                 BusType = bus.BusType,
                 TotalSeats = bus.TotalSeats,
+                TotalRows = bus.TotalRows,
+                TotalColumns = bus.TotalColumns,
                 ImageUrl = bus.ImageUrl,
                 IsActive = bus.IsActive,
                 CreatedAt = bus.CreatedAt,
@@ -138,6 +144,8 @@ public class BusService : IBusService
         bus.BusName = request.BusName;
         bus.BusType = request.BusType;
         bus.TotalSeats = request.TotalSeats;
+        bus.TotalRows = request.TotalRows;
+        bus.TotalColumns = request.TotalColumns;
         bus.ImageUrl = request.ImageUrl;
         bus.UpdatedAt = DateTimeOffset.UtcNow;
 
@@ -175,6 +183,8 @@ public class BusService : IBusService
             BusName = bus.BusName,
             BusType = bus.BusType,
             TotalSeats = bus.TotalSeats,
+            TotalRows = bus.TotalRows,
+            TotalColumns = bus.TotalColumns,
             ImageUrl = bus.ImageUrl,
             IsActive = bus.IsActive,
             CreatedAt = bus.CreatedAt,

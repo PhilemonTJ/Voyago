@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Voyago.BusService.Data;
@@ -11,9 +12,11 @@ using Voyago.BusService.Data;
 namespace Voyago.BusService.Migrations
 {
     [DbContext(typeof(BusDbContext))]
-    partial class BusDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916135504_AddBusLayoutDimensions")]
+    partial class AddBusLayoutDimensions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -115,9 +118,6 @@ namespace Voyago.BusService.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BusId", "SeatNumber")
-                        .IsUnique();
-
-                    b.HasIndex("BusId", "RowNumber", "ColumnNumber")
                         .IsUnique();
 
                     b.ToTable("Seats");

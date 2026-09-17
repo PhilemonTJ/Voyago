@@ -12,6 +12,7 @@ builder.AddNpgsqlDbContext<BusDbContext>(connectionName: "busdb");
 builder.Services.AddProblemDetails();
 
 builder.Services.AddScoped<IBusService, BusService>();
+builder.Services.AddScoped<ISeatService, SeatService>();
 
 builder.Services
     .AddControllers()

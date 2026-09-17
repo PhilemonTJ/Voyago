@@ -12,8 +12,8 @@ using Voyago.BusService.Data;
 namespace Voyago.BusService.Migrations
 {
     [DbContext(typeof(BusDbContext))]
-    [Migration("20260916094748_AddSeats")]
-    partial class AddSeats
+    [Migration("20260917051104_AddSeatCoordinateUniqueIndex")]
+    partial class AddSeatCoordinateUniqueIndex
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -61,6 +61,12 @@ namespace Voyago.BusService.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<int>("TotalColumns")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TotalSeats")
                         .HasColumnType("integer");
@@ -114,7 +120,10 @@ namespace Voyago.BusService.Migrations
                     b.HasIndex("BusId", "SeatNumber")
                         .IsUnique();
 
-                    b.ToTable("Seat");
+                    b.HasIndex("BusId", "RowNumber", "ColumnNumber")
+                        .IsUnique();
+
+                    b.ToTable("Seats");
                 });
 
             modelBuilder.Entity("Voyago.BusService.Models.Seat", b =>

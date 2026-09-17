@@ -12,7 +12,7 @@ namespace Voyago.BusService.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Seat",
+                name: "Seats",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
@@ -25,9 +25,9 @@ namespace Voyago.BusService.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Seat", x => x.Id);
+                    table.PrimaryKey("PK_Seats", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Seat_Buses_BusId",
+                        name: "FK_Seats_Buses_BusId",
                         column: x => x.BusId,
                         principalTable: "Buses",
                         principalColumn: "Id",
@@ -35,8 +35,8 @@ namespace Voyago.BusService.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Seat_BusId_SeatNumber",
-                table: "Seat",
+                name: "IX_Seats_BusId_SeatNumber",
+                table: "Seats",
                 columns: new[] { "BusId", "SeatNumber" },
                 unique: true);
         }
@@ -45,7 +45,7 @@ namespace Voyago.BusService.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Seat");
+                name: "Seats");
         }
     }
 }

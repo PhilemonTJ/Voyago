@@ -11,6 +11,8 @@ public class BusDbContext : DbContext
 
     public DbSet<Bus> Buses => Set<Bus>();
 
+    public DbSet<Seat> Seats => Set<Seat>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -35,6 +37,12 @@ public class BusDbContext : DbContext
                 .IsRequired();
 
             entity.Property(bus => bus.TotalSeats)
+                .IsRequired();
+
+            entity.Property(bus => bus.TotalRows)
+                .IsRequired();
+
+            entity.Property(bus => bus.TotalColumns)
                 .IsRequired();
 
             entity.Property(bus => bus.ImageUrl);
@@ -88,6 +96,14 @@ public class BusDbContext : DbContext
                     {
                         seat.BusId,
                         seat.SeatNumber
+                    })
+                .IsUnique();
+
+            entity.HasIndex(seat => new
+                    {
+                        seat.BusId,
+                        seat.RowNumber,
+                        seat.ColumnNumber
                     })
                 .IsUnique();
 
