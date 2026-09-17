@@ -2,6 +2,7 @@
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Buses;
 using Voyago.BusService.Models;
+using Voyago.BusService.Rules;
 using Voyago.BusService.Services.Interfaces;
 
 namespace Voyago.BusService.Services;
@@ -114,6 +115,22 @@ public class BusService : IBusService
         if (bus is null)
         {
             return null;
+        }
+
+        if (request.BusType != bus.BusType)
+        {
+            var hasInvalidSeat = await _db.Seats
+                .AnyAsync(seat =>
+                    seat.BusId == id &&
+                    seat.IsActive &&
+                    !BusSeatTypeRules.IsAllowed(
+                        request.BusType,
+                        seat.SeatType));
+
+            if (hasInvalidSeat)
+            {
+                throw new InvalidOperationException($"Cannot change bus type to '{request.BusType}' because the bus has existing seats that are not allowed for this bus type.");
+            }
         }
 
         if (request.TotalSeats < bus.TotalSeats)

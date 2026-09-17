@@ -2,6 +2,7 @@
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Seats;
 using Voyago.BusService.Models;
+using Voyago.BusService.Rules;
 using Voyago.BusService.Services.Interfaces;
 
 namespace Voyago.BusService.Services;
@@ -28,6 +29,8 @@ public class SeatService : ISeatService
         {
             throw new InvalidOperationException("Cannot add a seat to an inactive bus.");
         }
+
+        BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
 
         if (request.RowNumber < 1 || request.RowNumber > bus.TotalRows)
         {
@@ -159,6 +162,8 @@ public class SeatService : ISeatService
         {
             throw new InvalidOperationException("Cannot update a seat to an inactive bus.");
         }
+
+        BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
 
         if (request.RowNumber < 1 || request.RowNumber > bus.TotalRows)
         {
