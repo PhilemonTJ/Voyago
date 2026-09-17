@@ -59,12 +59,27 @@ public class SeatService : ISeatService
             throw new InvalidOperationException("A seat with this number already exists on the bus.");
         }
 
+        var level = GetLevel(request.SeatType);
+
+        var coordinateExists = await _db.Seats
+            .AnyAsync(seat =>
+                seat.BusId == busId &&
+                seat.Level == level &&
+                seat.RowNumber == request.RowNumber &&
+                seat.ColumnNumber == request.ColumnNumber);
+
+        if (coordinateExists)
+        {
+            throw new InvalidOperationException("A seat already exists at this position on the bus.");
+        }
+
         var seat = new Seat
         {
             Id = Guid.NewGuid(),
             BusId = busId,
             SeatNumber = request.SeatNumber,
             SeatType = request.SeatType,
+            Level = level,
             RowNumber = request.RowNumber,
             ColumnNumber = request.ColumnNumber,
             IsActive = true
@@ -97,6 +112,7 @@ public class SeatService : ISeatService
                 BusId = seat.BusId,
                 SeatNumber = seat.SeatNumber,
                 SeatType = seat.SeatType,
+                Level = seat.Level,
                 RowNumber = seat.RowNumber,
                 ColumnNumber = seat.ColumnNumber,
                 IsActive = seat.IsActive
@@ -115,6 +131,7 @@ public class SeatService : ISeatService
                 BusId = seat.BusId,
                 SeatNumber = seat.SeatNumber,
                 SeatType = seat.SeatType,
+                Level = seat.Level,
                 RowNumber = seat.RowNumber,
                 ColumnNumber = seat.ColumnNumber,
                 IsActive = seat.IsActive
@@ -164,8 +181,24 @@ public class SeatService : ISeatService
             throw new InvalidOperationException("A seat with this number already exists on the bus.");
         }
 
+        var level = GetLevel(request.SeatType);
+
+        var coordinateExists = await _db.Seats
+            .AnyAsync(other =>
+                other.Id != seatId &&
+                other.BusId == seat.BusId &&
+                other.Level == level &&
+                other.RowNumber == request.RowNumber &&
+                other.ColumnNumber == request.ColumnNumber);
+
+        if (coordinateExists)
+        {
+            throw new InvalidOperationException("A seat already exists at this position on the bus.");
+        }
+
         seat.SeatNumber = request.SeatNumber;
         seat.SeatType = request.SeatType;
+        seat.Level = level;
         seat.RowNumber = request.RowNumber;
         seat.ColumnNumber = request.ColumnNumber;
 
@@ -198,9 +231,21 @@ public class SeatService : ISeatService
             BusId = seat.BusId,
             SeatNumber = seat.SeatNumber,
             SeatType = seat.SeatType,
+            Level = seat.Level,
             RowNumber = seat.RowNumber,
             ColumnNumber = seat.ColumnNumber,
             IsActive = seat.IsActive
         };
+    }
+
+    private static SeatLevel GetLevel(SeatType seatType)
+    {
+        return seatType switch 
+            { 
+                SeatType.Seater => SeatLevel.Lower,
+                SeatType.SleeperLower => SeatLevel.Lower,
+                SeatType.SleeperUpper => SeatLevel.Upper,
+                _ => throw new ArgumentOutOfRangeException(nameof(seatType))
+            };
     }
 }

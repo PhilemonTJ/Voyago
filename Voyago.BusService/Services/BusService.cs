@@ -116,6 +116,42 @@ public class BusService : IBusService
             return null;
         }
 
+        if (request.TotalSeats < bus.TotalSeats)
+        {
+            var activeSeatCount = await _db.Seats
+                .CountAsync(s =>
+                    s.BusId == id &&
+                    s.IsActive);
+
+            if (request.TotalSeats < activeSeatCount)
+            {
+                throw new InvalidOperationException($"Cannot reduce total seats below the current active seat count of {activeSeatCount}.");
+            }
+        }
+
+        if (request.TotalRows < bus.TotalRows || request.TotalColumns < bus.TotalColumns)
+        {
+            var maxRow = await _db.Seats
+                .Where(s => s.BusId == id && s.IsActive)
+                .Select(s => (int?)s.RowNumber)
+                .MaxAsync() ?? 0;
+
+            var maxColumn = await _db.Seats
+                .Where(s => s.BusId == id && s.IsActive)
+                .Select(s => (int?)s.ColumnNumber)
+                .MaxAsync() ?? 0;
+
+            if (request.TotalRows < maxRow)
+            {
+                throw new InvalidOperationException($"Cannot reduce total rows below {maxRow} because an active seat exists at row {maxRow}.");
+            }
+
+            if (request.TotalColumns < maxColumn)
+            {
+                throw new InvalidOperationException($"Cannot reduce total columns below {maxColumn} because an active seat exists at column {maxColumn}.");
+            }
+        }
+
         var registrationExists =
             await _db.Buses.AnyAsync(
                 other =>

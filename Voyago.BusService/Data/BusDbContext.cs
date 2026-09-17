@@ -82,6 +82,11 @@ public class BusDbContext : DbContext
                 .HasMaxLength(20)
                 .IsRequired();
 
+            entity.Property(seat => seat.Level)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
+
             entity.Property(seat => seat.RowNumber)
                 .IsRequired();
 
@@ -102,6 +107,7 @@ public class BusDbContext : DbContext
             entity.HasIndex(seat => new
                     {
                         seat.BusId,
+                        seat.Level,
                         seat.RowNumber,
                         seat.ColumnNumber
                     })

@@ -16,6 +16,9 @@ public class Seat
     [Required]
     public SeatType SeatType { get; set; }
 
+    [Required]
+    public SeatLevel Level { get; set; }
+
     public int RowNumber { get; set; }
 
     public int ColumnNumber { get; set; }

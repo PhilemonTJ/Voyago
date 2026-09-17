@@ -12,6 +12,8 @@ public class SeatResponseDto
 
     public SeatType SeatType { get; set; }
 
+    public SeatLevel Level { get; set; }
+
     public int RowNumber { get; set; }
 
     public int ColumnNumber { get; set; }
