@@ -13,6 +13,7 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddScoped<IBusService, BusService>();
 builder.Services.AddScoped<ISeatService, SeatService>();
+builder.Services.AddScoped<IStopService, StopService>();
 
 builder.Services
     .AddControllers()

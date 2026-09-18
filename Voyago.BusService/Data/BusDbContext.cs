@@ -13,6 +13,8 @@ public class BusDbContext : DbContext
 
     public DbSet<Seat> Seats => Set<Seat>();
 
+    public DbSet<Stop> Stops => Set<Stop>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -117,6 +119,35 @@ public class BusDbContext : DbContext
                 .WithMany(bus => bus.Seats)
                 .HasForeignKey(seat => seat.BusId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Stop>(entity =>
+        {
+            entity.HasKey(stop => stop.Id);
+
+            entity.Property(stop => stop.Name)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(stop => stop.City)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(stop => stop.IsActive)
+                .IsRequired();
+
+            entity.Property(stop => stop.CreatedAt)
+                .IsRequired();
+
+            entity.Property(stop => stop.UpdatedAt);
+
+            entity.HasIndex(
+                    stop => new
+                    {
+                        stop.City,
+                        stop.Name
+                    })
+                .IsUnique();            
         });
     }
 }
