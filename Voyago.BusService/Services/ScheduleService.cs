@@ -261,6 +261,72 @@ public class ScheduleService : IScheduleService
         return true;
     }
 
+    public async Task<List<ScheduleSearchResponseDto>> SearchAsync(ScheduleSearchRequestDto request)
+    {
+        var origin = request.Origin.Trim();
+        var destination = request.Destination.Trim();
+
+        if (string.IsNullOrWhiteSpace(origin))
+        {
+            throw new ArgumentException(
+                "Origin is required.",
+                nameof(request));
+        }
+
+        if (string.IsNullOrWhiteSpace(destination))
+        {
+            throw new ArgumentException(
+                "Destination is required.",
+                nameof(request));
+        }
+
+        if (origin.Equals(destination, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Origin and destination must be different.");
+        }
+
+        var startDate = new DateTimeOffset(
+            request.Date.ToDateTime(TimeOnly.MinValue),
+            TimeSpan.Zero);
+
+        var endDate = startDate.AddDays(1);
+
+        return await _db.Schedules
+            .AsNoTracking()
+            .Where(schedule =>
+                schedule.IsActive &&
+                schedule.Bus.IsActive &&
+                schedule.OriginStop.IsActive &&
+                schedule.DestinationStop.IsActive &&
+                schedule.OriginStop.City == origin &&
+                schedule.DestinationStop.City == destination &&
+                schedule.DepartureTime >= startDate &&
+                schedule.DepartureTime < endDate)
+            .OrderBy(schedule => schedule.DepartureTime)
+            .Select(schedule => new ScheduleSearchResponseDto
+            {
+                ScheduleId = schedule.Id,
+
+                BusId = schedule.BusId,
+                BusNumber = schedule.Bus.BusNumber,
+                BusName = schedule.Bus.BusName,
+                BusType = schedule.Bus.BusType.ToString(),
+
+                OriginStopId = schedule.OriginStopId,
+                OriginStopName = schedule.OriginStop.Name,
+                OriginCity = schedule.OriginStop.City,
+
+                DestinationStopId = schedule.DestinationStopId,
+                DestinationStopName = schedule.DestinationStop.Name,
+                DestinationCity = schedule.DestinationStop.City,
+
+                DepartureTime = schedule.DepartureTime,
+                ArrivalTime = schedule.ArrivalTime
+            })
+            .ToListAsync();
+    }
+
     private static void ValidateTimes(DateTimeOffset departureTime,  DateTimeOffset arrivalTime)
     {
         if (arrivalTime <= departureTime)
@@ -270,8 +336,7 @@ public class ScheduleService : IScheduleService
         }
     }
 
-    private static ScheduleResponseDto MapToResponse(
-        Schedule schedule)
+    private static ScheduleResponseDto MapToResponse(Schedule schedule)
     {
         return new ScheduleResponseDto
         {

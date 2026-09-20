@@ -20,8 +20,7 @@ public class SchedulesController : ControllerBase
     {
         try
         {
-            var schedule =
-                await _scheduleService.CreateAsync(request);
+            var schedule = await _scheduleService.CreateAsync(request);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -59,8 +58,7 @@ public class SchedulesController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ScheduleResponseDto>> GetById(Guid id)
     {
-        var schedule =
-            await _scheduleService.GetByIdAsync(id);
+        var schedule = await _scheduleService.GetByIdAsync(id);
 
         if (schedule is null)
         {
@@ -80,8 +78,7 @@ public class SchedulesController : ControllerBase
     {
         try
         {
-            var schedule =
-                await _scheduleService.UpdateAsync(id, request);
+            var schedule = await _scheduleService.UpdateAsync(id, request);
 
             if (schedule is null)
             {
@@ -118,8 +115,7 @@ public class SchedulesController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var deleted =
-            await _scheduleService.DeleteAsync(id);
+        var deleted = await _scheduleService.DeleteAsync(id);
 
         if (!deleted)
         {
@@ -132,5 +128,35 @@ public class SchedulesController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    [HttpGet("search")]
+    public async Task<ActionResult<List<ScheduleSearchResponseDto>>> Search(
+    [FromQuery] ScheduleSearchRequestDto request)
+    {
+        try
+        {
+            var schedules = await _scheduleService.SearchAsync(request);
+
+            return Ok(schedules);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid schedule search",
+                Detail = ex.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid schedule search",
+                Detail = ex.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
     }
 }

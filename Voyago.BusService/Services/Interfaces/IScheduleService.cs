@@ -13,4 +13,6 @@ public interface IScheduleService
     Task<ScheduleResponseDto?> UpdateAsync(Guid id, UpdateScheduleRequestDto request);
 
     Task<bool> DeleteAsync(Guid id);
+
+    Task<List<ScheduleSearchResponseDto>> SearchAsync(ScheduleSearchRequestDto request);
 }
