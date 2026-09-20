@@ -15,8 +15,9 @@ public class BusDbContext : DbContext
 
     public DbSet<Stop> Stops => Set<Stop>();
 
-    protected override void OnModelCreating(
-        ModelBuilder modelBuilder)
+    public DbSet<Schedule> Schedules => Set<Schedule>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Bus>(entity =>
         {
@@ -148,6 +149,51 @@ public class BusDbContext : DbContext
                         stop.Name
                     })
                 .IsUnique();            
+        });
+
+        modelBuilder.Entity<Schedule>(entity =>
+        {
+            entity.HasKey(schedule => schedule.Id);
+
+            entity.Property(schedule => schedule.DepartureTime)
+                .IsRequired();
+
+            entity.Property(schedule => schedule.ArrivalTime)
+                .IsRequired();
+
+            entity.Property(schedule => schedule.IsActive)
+                .IsRequired();
+
+            entity.Property(schedule => schedule.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(schedule => schedule.Bus)
+                .WithMany(bus => bus.Schedules)
+                .HasForeignKey(schedule => schedule.BusId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(schedule => schedule.OriginStop)
+                .WithMany()
+                .HasForeignKey(schedule => schedule.OriginStopId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(schedule => schedule.DestinationStop)
+                .WithMany()
+                .HasForeignKey(schedule => schedule.DestinationStopId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(schedule => new
+            {
+                schedule.OriginStopId,
+                schedule.DestinationStopId,
+                schedule.DepartureTime
+            });
+
+            entity.HasIndex(schedule => new
+            {
+                schedule.BusId,
+                schedule.DepartureTime
+            });
         });
     }
 }

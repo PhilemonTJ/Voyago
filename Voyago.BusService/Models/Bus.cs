@@ -42,4 +42,6 @@ public class Bus
     public DateTimeOffset? UpdatedAt { get; set; }
 
     public ICollection<Seat> Seats { get; set; } = new List<Seat>();
+
+    public ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
 }
