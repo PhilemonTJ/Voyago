@@ -9,13 +9,11 @@ public class BusDbContext : DbContext
     {
     }
 
-    public DbSet<Bus> Buses => Set<Bus>();
-
-    public DbSet<Seat> Seats => Set<Seat>();
-
-    public DbSet<Stop> Stops => Set<Stop>();
-
-    public DbSet<Schedule> Schedules => Set<Schedule>();
+    public DbSet<Bus> Buses { get; set; }
+    public DbSet<Seat> Seats { get; set; }
+    public DbSet<Stop> Stops { get; set; }
+    public DbSet<Schedule> Schedules { get; set; }
+    public DbSet<ScheduleSeat> ScheduleSeats { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -161,7 +159,13 @@ public class BusDbContext : DbContext
             entity.Property(schedule => schedule.ArrivalTime)
                 .IsRequired();
 
-            entity.Property(schedule => schedule.IsActive)
+            entity.Property(schedule => schedule.BaseSeatPrice)
+                .HasPrecision(10, 2)
+                .IsRequired();
+
+            entity.Property(schedule => schedule.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20)
                 .IsRequired();
 
             entity.Property(schedule => schedule.CreatedAt)
@@ -193,6 +197,47 @@ public class BusDbContext : DbContext
             {
                 schedule.BusId,
                 schedule.DepartureTime
+            });
+        });
+
+        modelBuilder.Entity<ScheduleSeat>(entity =>
+        {
+            entity.HasKey(scheduleSeat => scheduleSeat.Id);
+
+            entity.Property(scheduleSeat => scheduleSeat.Price)
+                .HasPrecision(10, 2)
+                .IsRequired();
+
+            entity.Property(scheduleSeat => scheduleSeat.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(scheduleSeat => scheduleSeat.CreatedAt)
+                .IsRequired();
+
+            entity.HasOne(scheduleSeat => scheduleSeat.Schedule)
+                .WithMany(schedule => schedule.ScheduleSeats)
+                .HasForeignKey(scheduleSeat => scheduleSeat.ScheduleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(scheduleSeat => scheduleSeat.Seat)
+                .WithMany(seat => seat.ScheduleSeats)
+                .HasForeignKey(scheduleSeat => scheduleSeat.SeatId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(
+                    scheduleSeat => new
+                    {
+                        scheduleSeat.ScheduleId,
+                        scheduleSeat.SeatId
+                    })
+                .IsUnique();
+
+            entity.HasIndex(scheduleSeat => new
+            {
+                scheduleSeat.ScheduleId,
+                scheduleSeat.Status
             });
         });
     }

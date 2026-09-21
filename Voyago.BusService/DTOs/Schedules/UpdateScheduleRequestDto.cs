@@ -5,9 +5,6 @@ namespace Voyago.BusService.DTOs.Schedules;
 public class UpdateScheduleRequestDto
 {
     [Required]
-    public Guid BusId { get; set; }
-
-    [Required]
     public Guid OriginStopId { get; set; }
 
     [Required]
@@ -18,4 +15,7 @@ public class UpdateScheduleRequestDto
 
     [Required]
     public DateTimeOffset ArrivalTime { get; set; }
+
+    [Range(0.01, 100000)]
+    public decimal BaseSeatPrice { get; set; }
 }

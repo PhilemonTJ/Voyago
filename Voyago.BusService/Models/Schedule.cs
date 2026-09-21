@@ -23,7 +23,10 @@ public class Schedule
     public DateTimeOffset ArrivalTime { get; set; }
 
     [Required]
-    public bool IsActive { get; set; }
+    public decimal BaseSeatPrice { get; set; }
+
+    [Required]
+    public ScheduleStatus Status { get; set; }
 
     [Required]
     public DateTimeOffset CreatedAt { get; set; }
@@ -35,4 +38,6 @@ public class Schedule
     public Stop OriginStop { get; set; } = null!;
 
     public Stop DestinationStop { get; set; } = null!;
+
+    public ICollection<ScheduleSeat> ScheduleSeats { get; set; } = new List<ScheduleSeat>();
 }

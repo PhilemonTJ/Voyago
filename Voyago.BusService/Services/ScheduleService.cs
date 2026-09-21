@@ -44,6 +44,18 @@ public class ScheduleService : IScheduleService
                 "Cannot create a schedule for an inactive bus.");
         }
 
+        var seats = await _db.Seats
+            .Where(seat =>
+                seat.BusId == request.BusId &&
+                seat.IsActive)
+            .ToListAsync();
+
+        if (seats.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot create a schedule for a bus with no active seats.");
+        }
+
         var originStop = await _db.Stops
             .FirstOrDefaultAsync(stop =>
                 stop.Id == request.OriginStopId);
@@ -79,7 +91,7 @@ public class ScheduleService : IScheduleService
         var overlaps = await _db.Schedules
             .AnyAsync(schedule =>
                 schedule.BusId == request.BusId &&
-                schedule.IsActive &&
+                schedule.Status != ScheduleStatus.Cancelled &&
                 departureTime < schedule.ArrivalTime &&
                 arrivalTime > schedule.DepartureTime);
 
@@ -89,6 +101,8 @@ public class ScheduleService : IScheduleService
                 "The bus already has an overlapping active schedule.");
         }
 
+        var datetimeNow = DateTimeOffset.UtcNow;
+
         var schedule = new Schedule
         {
             Id = Guid.NewGuid(),
@@ -97,11 +111,24 @@ public class ScheduleService : IScheduleService
             DestinationStopId = request.DestinationStopId,
             DepartureTime = departureTime,
             ArrivalTime = arrivalTime,
-            IsActive = true,
-            CreatedAt = DateTimeOffset.UtcNow
+            BaseSeatPrice = request.BaseSeatPrice,
+            Status = ScheduleStatus.Scheduled,
+            CreatedAt = datetimeNow
         };
 
         _db.Schedules.Add(schedule);
+
+        foreach (var seat in seats)
+        {
+            schedule.ScheduleSeats.Add(new ScheduleSeat
+            {
+                Id = Guid.NewGuid(),
+                SeatId = seat.Id,
+                Price = request.BaseSeatPrice,
+                Status = ScheduleSeatStatus.Available,
+                CreatedAt = datetimeNow
+            });
+        }
 
         await _db.SaveChangesAsync();
 
@@ -121,7 +148,8 @@ public class ScheduleService : IScheduleService
                 DestinationStopId = schedule.DestinationStopId,
                 DepartureTime = schedule.DepartureTime,
                 ArrivalTime = schedule.ArrivalTime,
-                IsActive = schedule.IsActive,
+                BaseSeatPrice = schedule.BaseSeatPrice,
+                Status = schedule.Status,
                 CreatedAt = schedule.CreatedAt,
                 UpdatedAt = schedule.UpdatedAt
             })
@@ -141,7 +169,8 @@ public class ScheduleService : IScheduleService
                 DestinationStopId = schedule.DestinationStopId,
                 DepartureTime = schedule.DepartureTime,
                 ArrivalTime = schedule.ArrivalTime,
-                IsActive = schedule.IsActive,
+                BaseSeatPrice = schedule.BaseSeatPrice,
+                Status = schedule.Status,
                 CreatedAt = schedule.CreatedAt,
                 UpdatedAt = schedule.UpdatedAt
             })
@@ -169,20 +198,6 @@ public class ScheduleService : IScheduleService
         if (schedule is null)
         {
             return null;
-        }
-
-        var bus = await _db.Buses
-            .FirstOrDefaultAsync(bus => bus.Id == request.BusId);
-
-        if (bus is null)
-        {
-            throw new KeyNotFoundException("Bus not found.");
-        }
-
-        if (!bus.IsActive)
-        {
-            throw new InvalidOperationException(
-                "Cannot assign a schedule to an inactive bus.");
         }
 
         var originStop = await _db.Stops
@@ -220,8 +235,8 @@ public class ScheduleService : IScheduleService
         var overlaps = await _db.Schedules
             .AnyAsync(other =>
                 other.Id != id &&
-                other.BusId == request.BusId &&
-                other.IsActive &&
+                other.BusId == schedule.BusId &&
+                other.Status != ScheduleStatus.Cancelled &&
                 departureTime < other.ArrivalTime &&
                 arrivalTime > other.DepartureTime);
 
@@ -231,12 +246,26 @@ public class ScheduleService : IScheduleService
                 "The bus already has an overlapping active schedule.");
         }
 
-        schedule.BusId = request.BusId;
+        var datetimeNow = DateTimeOffset.UtcNow;
+
         schedule.OriginStopId = request.OriginStopId;
         schedule.DestinationStopId = request.DestinationStopId;
         schedule.DepartureTime = departureTime;
         schedule.ArrivalTime = arrivalTime;
-        schedule.UpdatedAt = DateTimeOffset.UtcNow;
+        schedule.BaseSeatPrice = request.BaseSeatPrice;
+        schedule.UpdatedAt = datetimeNow;
+
+        var availableSeats = await _db.ScheduleSeats
+            .Where(scheduleSeat =>
+                scheduleSeat.ScheduleId == schedule.Id &&
+                scheduleSeat.Status == ScheduleSeatStatus.Available)
+            .ToListAsync();
+
+        foreach (var scheduleSeat in availableSeats)
+        {
+            scheduleSeat.Price = request.BaseSeatPrice;
+            scheduleSeat.UpdatedAt = datetimeNow;
+        }
 
         await _db.SaveChangesAsync();
 
@@ -253,7 +282,7 @@ public class ScheduleService : IScheduleService
             return false;
         }
 
-        schedule.IsActive = false;
+        schedule.Status = ScheduleStatus.Cancelled;
         schedule.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -285,17 +314,18 @@ public class ScheduleService : IScheduleService
             throw new InvalidOperationException(
                 "Origin and destination must be different.");
         }
+        var indiaOffset = TimeSpan.FromHours(5.5);
 
         var startDate = new DateTimeOffset(
             request.Date.ToDateTime(TimeOnly.MinValue),
-            TimeSpan.Zero);
+            indiaOffset).ToUniversalTime();
 
         var endDate = startDate.AddDays(1);
 
         return await _db.Schedules
             .AsNoTracking()
             .Where(schedule =>
-                schedule.IsActive &&
+                schedule.Status == ScheduleStatus.Scheduled &&
                 schedule.Bus.IsActive &&
                 schedule.OriginStop.IsActive &&
                 schedule.DestinationStop.IsActive &&
@@ -346,7 +376,8 @@ public class ScheduleService : IScheduleService
             DestinationStopId = schedule.DestinationStopId,
             DepartureTime = schedule.DepartureTime,
             ArrivalTime = schedule.ArrivalTime,
-            IsActive = schedule.IsActive,
+            BaseSeatPrice = schedule.BaseSeatPrice,
+            Status = schedule.Status,
             CreatedAt = schedule.CreatedAt,
             UpdatedAt = schedule.UpdatedAt
         };

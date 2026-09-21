@@ -27,4 +27,6 @@ public class Seat
     public bool IsActive { get; set; }
 
     public Bus Bus { get; set; } = null!;
+
+    public ICollection<ScheduleSeat> ScheduleSeats { get; set; } = new List<ScheduleSeat>();
 }

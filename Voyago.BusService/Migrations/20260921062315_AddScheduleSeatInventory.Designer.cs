@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Voyago.BusService.Data;
@@ -11,9 +12,11 @@ using Voyago.BusService.Data;
 namespace Voyago.BusService.Migrations
 {
     [DbContext(typeof(BusDbContext))]
-    partial class BusDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921062315_AddScheduleSeatInventory")]
+    partial class AddScheduleSeatInventory
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

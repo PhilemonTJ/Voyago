@@ -18,4 +18,7 @@ public class CreateScheduleRequestDto
 
     [Required]
     public DateTimeOffset ArrivalTime { get; set; }
+
+    [Range(0.01, 100000)]
+    public decimal BaseSeatPrice { get; set; }
 }

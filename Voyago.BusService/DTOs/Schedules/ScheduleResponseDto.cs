@@ -1,4 +1,6 @@
-﻿namespace Voyago.BusService.DTOs.Schedules;
+﻿using Voyago.BusService.Models;
+
+namespace Voyago.BusService.DTOs.Schedules;
 
 public class ScheduleResponseDto
 {
@@ -14,7 +16,9 @@ public class ScheduleResponseDto
 
     public DateTimeOffset ArrivalTime { get; set; }
 
-    public bool IsActive { get; set; }
+    public decimal BaseSeatPrice { get; set; }
+
+    public ScheduleStatus Status { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
 
