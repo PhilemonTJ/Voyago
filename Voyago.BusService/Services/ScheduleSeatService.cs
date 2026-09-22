@@ -1,7 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.ScheduleSeats;
+using Voyago.BusService.Models;
 using Voyago.BusService.Services.Interfaces;
+using Voyago.Shared.Contracts.Bus;
 
 namespace Voyago.BusService.Services;
 
@@ -42,6 +44,53 @@ public class ScheduleSeatService : IScheduleSeatService
                 Level = scheduleSeat.Seat.Level.ToString(),
                 RowNumber = scheduleSeat.Seat.RowNumber,
                 ColumnNumber = scheduleSeat.Seat.ColumnNumber,
+                Price = scheduleSeat.Price,
+                Status = scheduleSeat.Status.ToString()
+            })
+            .ToListAsync();
+    }
+
+    public async Task<List<ScheduleSeatInfo>> GetForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds)
+    {
+        var schedule = await _db.Schedules
+            .AsNoTracking()
+            .Where(schedule => schedule.Id == scheduleId)
+            .Select(schedule => new
+            {
+                schedule.Id,
+                schedule.Status
+            })
+            .SingleOrDefaultAsync();
+
+        if (schedule is null)
+        {
+            throw new KeyNotFoundException("Schedule not found.");
+        }
+
+        if (schedule.Status != ScheduleStatus.Scheduled)
+        {
+            throw new InvalidOperationException(
+                $"Schedule cannot be booked because its status is '{schedule.Status}'.");
+        }
+
+        var seatIds = scheduleSeatIds.Distinct().ToList();
+
+        if (seatIds.Count == 0)
+        {
+            return new List<ScheduleSeatInfo>();
+        }
+
+        return await _db.ScheduleSeats
+            .AsNoTracking()
+            .Where(scheduleSeat =>
+                scheduleSeat.ScheduleId == scheduleId &&
+                seatIds.Contains(scheduleSeat.Id))
+            .Select(scheduleSeat => new ScheduleSeatInfo
+            {
+                ScheduleSeatId = scheduleSeat.Id,
+                ScheduleId = scheduleSeat.ScheduleId,
+                SeatId = scheduleSeat.SeatId,
+                SeatNumber = scheduleSeat.Seat.SeatNumber,
                 Price = scheduleSeat.Price,
                 Status = scheduleSeat.Status.ToString()
             })
