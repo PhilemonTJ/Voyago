@@ -4,16 +4,19 @@ using Voyago.BusService.DTOs.Seats;
 using Voyago.BusService.Models;
 using Voyago.BusService.Rules;
 using Voyago.BusService.Services.Interfaces;
+using Voyago.BusService.Exceptions;
 
 namespace Voyago.BusService.Services;
 
 public class SeatService : ISeatService
 {
     private readonly BusDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public SeatService(BusDbContext db)
+    public SeatService(BusDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<SeatResponseDto> CreateAsync(Guid busId, CreateSeatRequestDto request)
@@ -24,6 +27,8 @@ public class SeatService : ISeatService
         {
             throw new KeyNotFoundException("Bus not found.");
         }
+
+        EnsureCanManageBus(bus);
 
         if (!bus.IsActive)
         {
@@ -52,10 +57,12 @@ public class SeatService : ISeatService
             throw new InvalidOperationException("The bus has reached its maximum seat capacity.");
         }
 
+        var seatNumber = request.SeatNumber.Trim();
+
         var seatExists = await _db.Seats
             .AnyAsync(seat =>
                 seat.BusId == busId &&
-                seat.SeatNumber == request.SeatNumber);
+                seat.SeatNumber == seatNumber);
 
         if (seatExists)
         {
@@ -80,7 +87,7 @@ public class SeatService : ISeatService
         {
             Id = Guid.NewGuid(),
             BusId = busId,
-            SeatNumber = request.SeatNumber,
+            SeatNumber = seatNumber,
             SeatType = request.SeatType,
             Level = level,
             RowNumber = request.RowNumber,
@@ -97,16 +104,20 @@ public class SeatService : ISeatService
 
     public async Task<List<SeatResponseDto>> GetByBusIdAsync(Guid busId)
     {
-        var busExists = await _db.Buses.AnyAsync(bus => bus.Id == busId);
+        var bus = await _db.Buses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(bus => bus.Id == busId);
 
-        if (!busExists)
+        if (bus is null)
         {
             throw new KeyNotFoundException("Bus not found.");
         }
 
         return await _db.Seats
             .AsNoTracking()
-            .Where(seat => seat.BusId == busId)
+            .Where(seat =>
+                seat.BusId == busId &&
+                seat.IsActive)
             .OrderBy(seat => seat.RowNumber)
             .ThenBy(seat => seat.ColumnNumber)
             .Select(seat => new SeatResponseDto
@@ -127,7 +138,7 @@ public class SeatService : ISeatService
     {
         return await _db.Seats
             .AsNoTracking()
-            .Where(seat => seat.Id == seatId)
+            .Where(seat => seat.Id == seatId && seat.IsActive)
             .Select(seat => new SeatResponseDto
             {
                 Id = seat.Id,
@@ -158,9 +169,16 @@ public class SeatService : ISeatService
             throw new KeyNotFoundException("Bus not found.");
         }
 
+        EnsureCanManageBus(bus);
+
         if (!bus.IsActive)
         {
-            throw new InvalidOperationException("Cannot update a seat to an inactive bus.");
+            throw new InvalidOperationException("Cannot update a seat on an inactive bus.");
+        }
+
+        if (!seat.IsActive)
+        {
+            throw new InvalidOperationException("Cannot update an inactive seat.");
         }
 
         BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
@@ -170,16 +188,18 @@ public class SeatService : ISeatService
             throw new InvalidOperationException($"Row number must be between 1 and {bus.TotalRows}.");
         }
 
-        if (request.ColumnNumber < 1 || request.ColumnNumber > bus.TotalColumns)
+        if (request.ColumnNumber < 1 ||request.ColumnNumber > bus.TotalColumns)
         {
             throw new InvalidOperationException($"Column number must be between 1 and {bus.TotalColumns}.");
         }
+
+        var seatNumber = request.SeatNumber.Trim();
 
         var duplicateSeat = await _db.Seats
             .AnyAsync(other =>
                 other.Id != seatId &&
                 other.BusId == seat.BusId &&
-                other.SeatNumber == request.SeatNumber);
+                other.SeatNumber == seatNumber);
 
         if (duplicateSeat)
         {
@@ -201,7 +221,7 @@ public class SeatService : ISeatService
             throw new InvalidOperationException("A seat already exists at this position on the bus.");
         }
 
-        seat.SeatNumber = request.SeatNumber;
+        seat.SeatNumber = seatNumber;
         seat.SeatType = request.SeatType;
         seat.Level = level;
         seat.RowNumber = request.RowNumber;
@@ -221,11 +241,39 @@ public class SeatService : ISeatService
             return false;
         }
 
+        var bus = await _db.Buses.FirstOrDefaultAsync(bus => bus.Id == seat.BusId);
+
+        if (bus is null)
+        {
+            throw new KeyNotFoundException("Bus not found.");
+        }
+
+        EnsureCanManageBus(bus);
+
+        if (!seat.IsActive)
+        {
+            return false;
+        }
+
         seat.IsActive = false;
 
         await _db.SaveChangesAsync();
 
         return true;
+    }
+
+    private void EnsureCanManageBus(Bus bus)
+    {
+        if (_currentUser.IsAdmin)
+        {
+            return;
+        }
+
+        if (bus.OperatorId != _currentUser.UserId)
+        {
+            throw new ForbiddenException(
+                "You are not authorized to manage this bus.");
+        }
     }
 
     private static SeatResponseDto MapToResponse(Seat seat)
@@ -245,12 +293,12 @@ public class SeatService : ISeatService
 
     private static SeatLevel GetLevel(SeatType seatType)
     {
-        return seatType switch 
-            { 
-                SeatType.Seater => SeatLevel.Lower,
-                SeatType.SleeperLower => SeatLevel.Lower,
-                SeatType.SleeperUpper => SeatLevel.Upper,
-                _ => throw new ArgumentOutOfRangeException(nameof(seatType))
-            };
+        return seatType switch
+        {
+            SeatType.Seater => SeatLevel.Lower,
+            SeatType.SleeperLower => SeatLevel.Lower,
+            SeatType.SleeperUpper => SeatLevel.Upper,
+            _ => throw new ArgumentOutOfRangeException(nameof(seatType))
+        };
     }
 }

@@ -58,6 +58,8 @@ builder.Services
         };
     });
 
+builder.Services.AddAuthorization();
+
 builder.AddServiceDefaults();
 
 builder.Services.AddProblemDetails();

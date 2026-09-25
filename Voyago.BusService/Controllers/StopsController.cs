@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Voyago.BusService.DTOs.Stops;
 using Voyago.BusService.Services.Interfaces;
 
@@ -15,6 +16,7 @@ public class StopsController : ControllerBase
         _stopService = stopService;
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<StopResponseDto>> Create(CreateStopRequestDto request)
     {
@@ -38,6 +40,7 @@ public class StopsController : ControllerBase
         }
     }
 
+    [AllowAnonymous]
     [HttpGet]
     public async Task<ActionResult<List<StopResponseDto>>> GetAll()
     {
@@ -46,6 +49,7 @@ public class StopsController : ControllerBase
         return Ok(stops);
     }
 
+    [AllowAnonymous]
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<StopResponseDto>> GetById(Guid id)
     {
@@ -64,6 +68,7 @@ public class StopsController : ControllerBase
         return Ok(stop);
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<StopResponseDto>> Update(Guid id, UpdateStopRequestDto request)
     {
@@ -94,6 +99,7 @@ public class StopsController : ControllerBase
         }
     }
 
+    [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

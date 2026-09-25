@@ -8,7 +8,7 @@ namespace Voyago.UserService.Controllers;
 
 [ApiController]
 [Route("api/operator-profile")]
-[Authorize(Roles = "Operator")]
+[Authorize(Roles = "Operator, Admin")]
 public class OperatorProfilesController : ControllerBase
 {
     private readonly IOperatorProfileService _operatorProfileService;

@@ -15,8 +15,7 @@ public class StopService : IStopService
         _db = db;
     }
 
-    public async Task<StopResponseDto> CreateAsync(
-        CreateStopRequestDto request)
+    public async Task<StopResponseDto> CreateAsync(CreateStopRequestDto request)
     {
         var name = request.Name.Trim();
         var city = request.City.Trim();
@@ -51,6 +50,7 @@ public class StopService : IStopService
     {
         return await _db.Stops
             .AsNoTracking()
+            .Where(stop => stop.IsActive)
             .OrderBy(stop => stop.City)
             .ThenBy(stop => stop.Name)
             .Select(stop => new StopResponseDto
@@ -69,7 +69,7 @@ public class StopService : IStopService
     {
         return await _db.Stops
             .AsNoTracking()
-            .Where(stop => stop.Id == id)
+            .Where(stop => stop.Id == id && stop.IsActive)
             .Select(stop => new StopResponseDto
             {
                 Id = stop.Id,

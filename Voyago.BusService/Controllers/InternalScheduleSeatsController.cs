@@ -18,17 +18,22 @@ public class InternalScheduleSeatsController : ControllerBase
 
     [HttpPost("validate")]
     public async Task<ActionResult<List<ScheduleSeatInfo>>> Validate(
-    Guid scheduleId,
-    [FromBody] List<Guid> scheduleSeatIds)
+        Guid scheduleId,
+        [FromBody] List<Guid> scheduleSeatIds)
     {
+        if (scheduleSeatIds is null || scheduleSeatIds.Count == 0)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "No seats provided.",
+                detail: "At least one schedule seat must be provided.");
+        }
+
         try
         {
-            var seats = await _scheduleSeatService
-                .GetForBookingAsync(
-                    scheduleId,
-                    scheduleSeatIds);
-
             var requestedIds = scheduleSeatIds.Distinct().ToList();
+
+            var seats = await _scheduleSeatService.GetForBookingAsync(scheduleId, requestedIds);
 
             if (seats.Count != requestedIds.Count)
             {

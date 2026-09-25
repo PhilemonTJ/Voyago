@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Buses;
+using Voyago.BusService.Exceptions;
 using Voyago.BusService.Models;
 using Voyago.BusService.Rules;
 using Voyago.BusService.Services.Interfaces;
@@ -10,17 +11,34 @@ namespace Voyago.BusService.Services;
 public class BusService : IBusService
 {
     private readonly BusDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public BusService(BusDbContext db)
+    public BusService(BusDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<BusResponseDto> CreateAsync(CreateBusRequestDto request)
     {
+        Guid operatorId;
+
+        if (_currentUser.IsAdmin)
+        {
+            operatorId = request.OperatorId;
+        }
+        else
+        {
+            operatorId = _currentUser.UserId;
+        }
+
+        var registrationNumber = request.RegistrationNumber.Trim();
+
+        var busNumber = request.BusNumber.Trim();
+
         var registrationExists =
             await _db.Buses.AnyAsync(
-                bus => bus.RegistrationNumber == request.RegistrationNumber);
+                bus => bus.RegistrationNumber == registrationNumber);
 
         if (registrationExists)
         {
@@ -30,8 +48,8 @@ public class BusService : IBusService
         var busNumberExists =
             await _db.Buses.AnyAsync(
                 bus =>
-                    bus.OperatorId == request.OperatorId &&
-                    bus.BusNumber == request.BusNumber);
+                    bus.OperatorId == operatorId &&
+                    bus.BusNumber == busNumber);
 
         if (busNumberExists)
         {
@@ -41,15 +59,15 @@ public class BusService : IBusService
         var bus = new Bus
         {
             Id = Guid.NewGuid(),
-            OperatorId = request.OperatorId,
-            RegistrationNumber = request.RegistrationNumber,
-            BusNumber = request.BusNumber,
-            BusName = request.BusName,
+            OperatorId = operatorId,
+            RegistrationNumber = registrationNumber,
+            BusNumber = busNumber,
+            BusName = request.BusName?.Trim(),
             BusType = request.BusType,
             TotalSeats = request.TotalSeats,
             TotalRows = request.TotalRows,
             TotalColumns = request.TotalColumns,
-            ImageUrl = request.ImageUrl,
+            ImageUrl = request.ImageUrl?.Trim(),
             IsActive = true,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -63,8 +81,27 @@ public class BusService : IBusService
 
     public async Task<List<BusResponseDto>> GetAllAsync()
     {
-        return await _db.Buses
+        var query = _db.Buses
             .AsNoTracking()
+            .AsQueryable();
+
+        if (_currentUser.IsAdmin)
+        {
+            // Admin can see all buses.
+        }
+        else if (_currentUser.IsOperator)
+        {
+            query = query.Where(
+                bus =>
+                    bus.OperatorId == _currentUser.UserId &&
+                    bus.IsActive);
+        }
+        else
+        {
+            query = query.Where(bus => bus.IsActive);
+        }
+
+        return await query
             .Select(bus => new BusResponseDto
             {
                 Id = bus.Id,
@@ -86,26 +123,21 @@ public class BusService : IBusService
 
     public async Task<BusResponseDto?> GetByIdAsync(Guid id)
     {
-        return await _db.Buses
+        var bus = await _db.Buses
             .AsNoTracking()
-            .Where(bus => bus.Id == id)
-            .Select(bus => new BusResponseDto
-            {
-                Id = bus.Id,
-                OperatorId = bus.OperatorId,
-                RegistrationNumber = bus.RegistrationNumber,
-                BusNumber = bus.BusNumber,
-                BusName = bus.BusName,
-                BusType = bus.BusType,
-                TotalSeats = bus.TotalSeats,
-                TotalRows = bus.TotalRows,
-                TotalColumns = bus.TotalColumns,
-                ImageUrl = bus.ImageUrl,
-                IsActive = bus.IsActive,
-                CreatedAt = bus.CreatedAt,
-                UpdatedAt = bus.UpdatedAt
-            })
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(bus => bus.Id == id);
+
+        if (bus is null)
+        {
+            return null;
+        }
+
+        if (!bus.IsActive && !_currentUser.IsAdmin)
+        {
+            return null;
+        }
+
+        return MapToResponse(bus);
     }
 
     public async Task<BusResponseDto?> UpdateAsync(Guid id, UpdateBusRequestDto request)
@@ -115,6 +147,13 @@ public class BusService : IBusService
         if (bus is null)
         {
             return null;
+        }
+
+        EnsureCanManageBus(bus);
+
+        if (!bus.IsActive)
+        {
+            throw new InvalidOperationException("Cannot update an inactive bus.");
         }
 
         if (request.BusType != bus.BusType)
@@ -136,9 +175,9 @@ public class BusService : IBusService
         if (request.TotalSeats < bus.TotalSeats)
         {
             var activeSeatCount = await _db.Seats
-                .CountAsync(s =>
-                    s.BusId == id &&
-                    s.IsActive);
+                .CountAsync(seat =>
+                    seat.BusId == id &&
+                    seat.IsActive);
 
             if (request.TotalSeats < activeSeatCount)
             {
@@ -149,13 +188,15 @@ public class BusService : IBusService
         if (request.TotalRows < bus.TotalRows || request.TotalColumns < bus.TotalColumns)
         {
             var maxRow = await _db.Seats
-                .Where(s => s.BusId == id && s.IsActive)
-                .Select(s => (int?)s.RowNumber)
+                .Where(seat =>
+                    seat.BusId == id &&
+                    seat.IsActive)
+                .Select(seat => (int?)seat.RowNumber)
                 .MaxAsync() ?? 0;
 
             var maxColumn = await _db.Seats
-                .Where(s => s.BusId == id && s.IsActive)
-                .Select(s => (int?)s.ColumnNumber)
+                .Where(seat => seat.BusId == id && seat.IsActive)
+                .Select(seat => (int?)seat.ColumnNumber)
                 .MaxAsync() ?? 0;
 
             if (request.TotalRows < maxRow)
@@ -173,7 +214,7 @@ public class BusService : IBusService
             await _db.Buses.AnyAsync(
                 other =>
                     other.Id != id &&
-                    other.RegistrationNumber == request.RegistrationNumber);
+                    other.RegistrationNumber == request.RegistrationNumber.Trim());
 
         if (registrationExists)
         {
@@ -185,21 +226,21 @@ public class BusService : IBusService
                 other =>
                     other.Id != id &&
                     other.OperatorId == bus.OperatorId &&
-                    other.BusNumber == request.BusNumber);
+                    other.BusNumber == request.BusNumber.Trim());
 
         if (busNumberExists)
         {
             throw new InvalidOperationException("This bus number already exists for the operator.");
         }
 
-        bus.RegistrationNumber = request.RegistrationNumber;
-        bus.BusNumber = request.BusNumber;
-        bus.BusName = request.BusName;
+        bus.RegistrationNumber = request.RegistrationNumber.Trim();
+        bus.BusNumber = request.BusNumber.Trim();
+        bus.BusName = request.BusName?.Trim();
         bus.BusType = request.BusType;
         bus.TotalSeats = request.TotalSeats;
         bus.TotalRows = request.TotalRows;
         bus.TotalColumns = request.TotalColumns;
-        bus.ImageUrl = request.ImageUrl;
+        bus.ImageUrl = request.ImageUrl?.Trim();
         bus.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync();
@@ -217,12 +258,32 @@ public class BusService : IBusService
             return false;
         }
 
+        EnsureCanManageBus(bus);
+
+        if (!bus.IsActive)
+        {
+            return false;
+        }
+
         bus.IsActive = false;
         bus.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync();
 
         return true;
+    }
+
+    private void EnsureCanManageBus(Bus bus)
+    {
+        if (_currentUser.IsAdmin)
+        {
+            return;
+        }
+
+        if (bus.OperatorId != _currentUser.UserId)
+        {
+            throw new ForbiddenException("You are not authorized to manage this bus.");
+        }
     }
 
     private static BusResponseDto MapToResponse(Bus bus)

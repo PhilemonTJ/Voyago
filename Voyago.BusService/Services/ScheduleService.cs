@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Schedules;
+using Voyago.BusService.Exceptions;
 using Voyago.BusService.Models;
 using Voyago.BusService.Services.Interfaces;
 
@@ -9,10 +10,12 @@ namespace Voyago.BusService.Services;
 public class ScheduleService : IScheduleService
 {
     private readonly BusDbContext _db;
+    private readonly ICurrentUserService _currentUser;
 
-    public ScheduleService(BusDbContext db)
+    public ScheduleService(BusDbContext db, ICurrentUserService currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<ScheduleResponseDto> CreateAsync(CreateScheduleRequestDto request)
@@ -26,8 +29,7 @@ public class ScheduleService : IScheduleService
 
         if (request.OriginStopId == request.DestinationStopId)
         {
-            throw new InvalidOperationException(
-                "Origin and destination stops must be different.");
+            throw new InvalidOperationException("Origin and destination stops must be different.");
         }
 
         var bus = await _db.Buses
@@ -38,10 +40,11 @@ public class ScheduleService : IScheduleService
             throw new KeyNotFoundException("Bus not found.");
         }
 
+        EnsureCanManageBus(bus);
+
         if (!bus.IsActive)
         {
-            throw new InvalidOperationException(
-                "Cannot create a schedule for an inactive bus.");
+            throw new InvalidOperationException("Cannot create a schedule for an inactive bus.");
         }
 
         var seats = await _db.Seats
@@ -52,8 +55,7 @@ public class ScheduleService : IScheduleService
 
         if (seats.Count == 0)
         {
-            throw new InvalidOperationException(
-                "Cannot create a schedule for a bus with no active seats.");
+            throw new InvalidOperationException("Cannot create a schedule for a bus with no active seats.");
         }
 
         var originStop = await _db.Stops
@@ -62,14 +64,12 @@ public class ScheduleService : IScheduleService
 
         if (originStop is null)
         {
-            throw new KeyNotFoundException(
-                "Origin stop not found.");
+            throw new KeyNotFoundException("Origin stop not found.");
         }
 
         if (!originStop.IsActive)
         {
-            throw new InvalidOperationException(
-                "The origin stop is inactive.");
+            throw new InvalidOperationException("The origin stop is inactive.");
         }
 
         var destinationStop = await _db.Stops
@@ -78,14 +78,12 @@ public class ScheduleService : IScheduleService
 
         if (destinationStop is null)
         {
-            throw new KeyNotFoundException(
-                "Destination stop not found.");
+            throw new KeyNotFoundException("Destination stop not found.");
         }
 
         if (!destinationStop.IsActive)
         {
-            throw new InvalidOperationException(
-                "The destination stop is inactive.");
+            throw new InvalidOperationException("The destination stop is inactive.");
         }
 
         var overlaps = await _db.Schedules
@@ -97,8 +95,7 @@ public class ScheduleService : IScheduleService
 
         if (overlaps)
         {
-            throw new InvalidOperationException(
-                "The bus already has an overlapping active schedule.");
+            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
         }
 
         var datetimeNow = DateTimeOffset.UtcNow;
@@ -139,6 +136,11 @@ public class ScheduleService : IScheduleService
     {
         return await _db.Schedules
             .AsNoTracking()
+            .Where(schedule => 
+                schedule.Status == ScheduleStatus.Scheduled &&
+                schedule.Bus.IsActive &&
+                schedule.OriginStop.IsActive &&
+                schedule.DestinationStop.IsActive)
             .OrderBy(schedule => schedule.DepartureTime)
             .Select(schedule => new ScheduleResponseDto
             {
@@ -160,7 +162,13 @@ public class ScheduleService : IScheduleService
     {
         return await _db.Schedules
             .AsNoTracking()
-            .Where(schedule => schedule.Id == id)
+            .Where(schedule => 
+                schedule.Id == id &&
+                schedule.Status == ScheduleStatus.Scheduled &&
+                schedule.Bus.IsActive &&
+                schedule.OriginStop.IsActive &&
+                schedule.DestinationStop.IsActive)
+            .OrderBy(schedule => schedule.DepartureTime)
             .Select(schedule => new ScheduleResponseDto
             {
                 Id = schedule.Id,
@@ -188,8 +196,7 @@ public class ScheduleService : IScheduleService
 
         if (request.OriginStopId == request.DestinationStopId)
         {
-            throw new InvalidOperationException(
-                "Origin and destination stops must be different.");
+            throw new InvalidOperationException("Origin and destination stops must be different.");
         }
 
         var schedule = await _db.Schedules
@@ -200,20 +207,28 @@ public class ScheduleService : IScheduleService
             return null;
         }
 
+        var bus = await _db.Buses
+            .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
+
+        if (bus is null)
+        {
+            throw new KeyNotFoundException("Bus not found.");
+        }
+
+        EnsureCanManageBus(bus);
+
         var originStop = await _db.Stops
             .FirstOrDefaultAsync(stop =>
                 stop.Id == request.OriginStopId);
 
         if (originStop is null)
         {
-            throw new KeyNotFoundException(
-                "Origin stop not found.");
+            throw new KeyNotFoundException("Origin stop not found.");
         }
 
         if (!originStop.IsActive)
         {
-            throw new InvalidOperationException(
-                "The origin stop is inactive.");
+            throw new InvalidOperationException("The origin stop is inactive.");
         }
 
         var destinationStop = await _db.Stops
@@ -222,14 +237,12 @@ public class ScheduleService : IScheduleService
 
         if (destinationStop is null)
         {
-            throw new KeyNotFoundException(
-                "Destination stop not found.");
+            throw new KeyNotFoundException("Destination stop not found.");
         }
 
         if (!destinationStop.IsActive)
         {
-            throw new InvalidOperationException(
-                "The destination stop is inactive.");
+            throw new InvalidOperationException("The destination stop is inactive.");
         }
 
         var overlaps = await _db.Schedules
@@ -242,8 +255,7 @@ public class ScheduleService : IScheduleService
 
         if (overlaps)
         {
-            throw new InvalidOperationException(
-                "The bus already has an overlapping active schedule.");
+            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
         }
 
         var datetimeNow = DateTimeOffset.UtcNow;
@@ -281,6 +293,16 @@ public class ScheduleService : IScheduleService
         {
             return false;
         }
+
+        var bus = await _db.Buses
+            .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
+
+        if (bus is null)
+        {
+            throw new KeyNotFoundException("Bus not found.");
+        }
+
+        EnsureCanManageBus(bus);
 
         schedule.Status = ScheduleStatus.Cancelled;
         schedule.UpdatedAt = DateTimeOffset.UtcNow;
@@ -355,6 +377,19 @@ public class ScheduleService : IScheduleService
                 ArrivalTime = schedule.ArrivalTime
             })
             .ToListAsync();
+    }
+    private void EnsureCanManageBus(Bus bus)
+    {
+        if (_currentUser.IsAdmin)
+        {
+            return;
+        }
+
+        if (bus.OperatorId != _currentUser.UserId)
+        {
+            throw new ForbiddenException(
+                "You are not authorized to manage schedules for this bus.");
+        }
     }
 
     private static void ValidateTimes(DateTimeOffset departureTime,  DateTimeOffset arrivalTime)

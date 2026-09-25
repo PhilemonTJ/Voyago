@@ -16,15 +16,32 @@ public class ScheduleSeatService : IScheduleSeatService
         _db = db;
     }
 
-    public async Task<List<ScheduleSeatResponseDto>> GetByScheduleIdAsync(
-        Guid scheduleId)
+    public async Task<List<ScheduleSeatResponseDto>> GetByScheduleIdAsync(Guid scheduleId)
     {
-        var scheduleExists = await _db.Schedules
-            .AnyAsync(schedule => schedule.Id == scheduleId);
+        var schedule = await _db.Schedules
+            .AsNoTracking()
+            .Where(schedule => schedule.Id == scheduleId)
+            .Select(schedule => new
+            {
+                schedule.Id,
+                schedule.Status,
+                BusIsActive = schedule.Bus.IsActive
+            })
+            .SingleOrDefaultAsync();
 
-        if (!scheduleExists)
+        if (schedule is null)
         {
             throw new KeyNotFoundException("Schedule not found.");
+        }
+
+        if (schedule.Status != ScheduleStatus.Scheduled)
+        {
+            throw new InvalidOperationException($"Seat availability cannot be viewed because the schedule status is '{schedule.Status}'.");
+        }
+
+        if (!schedule.BusIsActive)
+        {
+            throw new InvalidOperationException("Seat availability cannot be viewed because the bus is inactive.");
         }
 
         return await _db.ScheduleSeats
@@ -50,7 +67,9 @@ public class ScheduleSeatService : IScheduleSeatService
             .ToListAsync();
     }
 
-    public async Task<List<ScheduleSeatInfo>> GetForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds)
+    public async Task<List<ScheduleSeatInfo>> GetForBookingAsync(
+        Guid scheduleId,
+        IEnumerable<Guid> scheduleSeatIds)
     {
         var schedule = await _db.Schedules
             .AsNoTracking()
@@ -58,7 +77,8 @@ public class ScheduleSeatService : IScheduleSeatService
             .Select(schedule => new
             {
                 schedule.Id,
-                schedule.Status
+                schedule.Status,
+                BusIsActive = schedule.Bus.IsActive
             })
             .SingleOrDefaultAsync();
 
@@ -69,11 +89,17 @@ public class ScheduleSeatService : IScheduleSeatService
 
         if (schedule.Status != ScheduleStatus.Scheduled)
         {
-            throw new InvalidOperationException(
-                $"Schedule cannot be booked because its status is '{schedule.Status}'.");
+            throw new InvalidOperationException($"Schedule cannot be booked because its status is '{schedule.Status}'.");
         }
 
-        var seatIds = scheduleSeatIds.Distinct().ToList();
+        if (!schedule.BusIsActive)
+        {
+            throw new InvalidOperationException("Schedule cannot be booked because the bus is inactive.");
+        }
+
+        var seatIds = scheduleSeatIds
+            .Distinct()
+            .ToList();
 
         if (seatIds.Count == 0)
         {
@@ -84,7 +110,8 @@ public class ScheduleSeatService : IScheduleSeatService
             .AsNoTracking()
             .Where(scheduleSeat =>
                 scheduleSeat.ScheduleId == scheduleId &&
-                seatIds.Contains(scheduleSeat.Id))
+                seatIds.Contains(scheduleSeat.Id) &&
+                scheduleSeat.Seat.IsActive)
             .Select(scheduleSeat => new ScheduleSeatInfo
             {
                 ScheduleSeatId = scheduleSeat.Id,
