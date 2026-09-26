@@ -10,9 +10,9 @@ namespace Voyago.BusService.Services;
 public class ScheduleService : IScheduleService
 {
     private readonly BusDbContext _db;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentUser _currentUser;
 
-    public ScheduleService(BusDbContext db, ICurrentUserService currentUser)
+    public ScheduleService(BusDbContext db, ICurrentUser currentUser)
     {
         _db = db;
         _currentUser = currentUser;

@@ -1,12 +1,12 @@
-﻿using System.Security.Claims;
+﻿namespace Voyago.BookingService.Services.Interfaces;
 
-namespace Voyago.BusService.Services.Interfaces;
-
-public interface ICurrentUserService
+public interface ICurrentUser
 {
     Guid UserId { get; }
 
     bool IsAuthenticated { get; }
+
+    bool IsPassenger { get; }
 
     bool IsOperator { get; }
 

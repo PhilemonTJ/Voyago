@@ -9,12 +9,6 @@ using Voyago.BusService.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var jwtSettings = builder.Configuration
-    .GetSection(JwtSettings.SectionName)
-    .Get<JwtSettings>()
-    ?? throw new InvalidOperationException(
-        "JWT configuration is missing.");
-
 builder.Services
     .AddOptions<JwtSettings>()
     .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
@@ -33,6 +27,11 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        var jwtSettings = builder.Configuration
+            .GetSection(JwtSettings.SectionName)
+            .Get<JwtSettings>()
+            ?? throw new InvalidOperationException("JWT configuration is missing.");
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -66,7 +65,7 @@ builder.Services.AddScoped<IScheduleService, ScheduleService>();
 builder.Services.AddScoped<IScheduleSeatService, ScheduleSeatService>();
 
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
 builder.Services
     .AddControllers()

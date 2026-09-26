@@ -11,9 +11,9 @@ namespace Voyago.BusService.Services;
 public class BusService : IBusService
 {
     private readonly BusDbContext _db;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentUser _currentUser;
 
-    public BusService(BusDbContext db, ICurrentUserService currentUser)
+    public BusService(BusDbContext db, ICurrentUser currentUser)
     {
         _db = db;
         _currentUser = currentUser;

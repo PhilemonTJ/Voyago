@@ -11,11 +11,6 @@ using Voyago.UserService.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var jwtSettings = builder.Configuration
-    .GetSection(JwtSettings.SectionName)
-    .Get<JwtSettings>()
-    ?? throw new InvalidOperationException("JWT configuration is missing.");
-
 builder.Services
     .AddOptions<JwtSettings>()
     .Bind(builder.Configuration.GetSection(JwtSettings.SectionName))
@@ -40,6 +35,11 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        var jwtSettings = builder.Configuration
+            .GetSection(JwtSettings.SectionName)
+            .Get<JwtSettings>()
+            ?? throw new InvalidOperationException("JWT configuration is missing.");
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,

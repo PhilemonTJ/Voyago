@@ -11,9 +11,9 @@ namespace Voyago.BusService.Services;
 public class SeatService : ISeatService
 {
     private readonly BusDbContext _db;
-    private readonly ICurrentUserService _currentUser;
+    private readonly ICurrentUser _currentUser;
 
-    public SeatService(BusDbContext db, ICurrentUserService currentUser)
+    public SeatService(BusDbContext db, ICurrentUser currentUser)
     {
         _db = db;
         _currentUser = currentUser;
