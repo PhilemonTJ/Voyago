@@ -73,6 +73,8 @@ builder.Services.AddScoped<IBusServiceClient, BusServiceClient>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
+builder.Services.AddScoped<IBookingService, BookingService>();
+
 builder.Services
     .AddControllers()
     .AddJsonOptions(options =>
