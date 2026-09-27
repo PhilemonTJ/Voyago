@@ -12,6 +12,7 @@ public class BookingDbContext : DbContext
 
     public DbSet<Booking> Bookings { get; set; }
     public DbSet<BookingSeat> BookingSeats { get; set; }
+    public DbSet<Invoice> Invoices { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,6 +74,33 @@ public class BookingDbContext : DbContext
             .IsUnique();
 
             entity.HasIndex(bookingSeat => bookingSeat.ScheduleSeatId);
+        });
+
+        modelBuilder.Entity<Invoice>(entity =>
+        {
+            entity.HasKey(invoice => invoice.Id);
+
+            entity.Property(invoice => invoice.InvoiceNumber)
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(invoice => invoice.Amount)
+                .HasPrecision(10, 2)
+                .IsRequired();
+
+            entity.Property(invoice => invoice.IssuedAt)
+                .IsRequired();
+            
+            entity.HasOne(invoice => invoice.Booking)
+                .WithOne()
+                .HasForeignKey<Invoice>(invoice => invoice.BookingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(invoice => invoice.BookingId)
+                .IsUnique();
+
+            entity.HasIndex(invoice => invoice.InvoiceNumber)
+                .IsUnique();
         });
     }
 }

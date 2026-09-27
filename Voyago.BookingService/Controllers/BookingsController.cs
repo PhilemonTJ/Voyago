@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Voyago.BookingService.DTOs.Bookings;
+using Voyago.BookingService.DTOs.Invoices;
 using Voyago.BookingService.Exceptions;
 using Voyago.BookingService.Services.Interfaces;
 
@@ -115,5 +116,24 @@ public class BookingsController : ControllerBase
                 Status = StatusCodes.Status409Conflict
             });
         }
+    }
+
+    [HttpGet("{bookingId:guid}/invoice")]
+    [Authorize]
+    public async Task<ActionResult<InvoiceResponseDto>> GetInvoice(Guid bookingId)
+    {
+        var invoice = await _bookingService.GetInvoiceAsync(bookingId);
+
+        if (invoice is null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Invoice not found",
+                Detail = "The requested invoice could not be found.",
+                Status = StatusCodes.Status404NotFound
+            });
+        }
+
+        return Ok(invoice);
     }
 }

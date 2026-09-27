@@ -1,5 +1,4 @@
-﻿using System.Net.Http.Json;
-using Voyago.Shared.Contracts.Bus;
+﻿using Voyago.Shared.Contracts.Bus;
 
 namespace Voyago.BookingService.Clients.BusService;
 

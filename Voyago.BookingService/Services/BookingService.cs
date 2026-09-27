@@ -2,6 +2,7 @@
 using Voyago.BookingService.Clients.BusService;
 using Voyago.BookingService.Data;
 using Voyago.BookingService.DTOs.Bookings;
+using Voyago.BookingService.DTOs.Invoices;
 using Voyago.BookingService.Exceptions;
 using Voyago.BookingService.Models;
 using Voyago.BookingService.Services.Interfaces;
@@ -49,6 +50,15 @@ public class BookingService : IBookingService
             CreatedAt = now
         };
 
+        var invoice = new Invoice
+        {
+            Id = Guid.NewGuid(),
+            BookingId = booking.Id,
+            InvoiceNumber = GenerateInvoiceNumber(),
+            Amount = booking.TotalAmount,
+            IssuedAt = now
+        };
+
         foreach (var seat in seats)
         {
             booking.BookingSeats.Add(new BookingSeat
@@ -64,6 +74,7 @@ public class BookingService : IBookingService
         }
 
         _db.Bookings.Add(booking);
+        _db.Invoices.Add(invoice);
 
         await _db.SaveChangesAsync();
 
@@ -152,6 +163,39 @@ public class BookingService : IBookingService
         return true;
     }
 
+    public async Task<InvoiceResponseDto?> GetInvoiceAsync(Guid bookingId)
+    {
+        var booking = await _db.Bookings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(booking => booking.Id == bookingId);
+
+        if (booking is null)
+        {
+            return null;
+        }
+
+        EnsureCanAccess(booking);
+
+        var invoice = await _db.Invoices
+            .AsNoTracking()
+            .FirstOrDefaultAsync(invoice =>
+                invoice.BookingId == bookingId);
+
+        if (invoice is null)
+        {
+            return null;
+        }
+
+        return new InvoiceResponseDto
+        {
+            Id = invoice.Id,
+            BookingId = invoice.BookingId,
+            InvoiceNumber = invoice.InvoiceNumber,
+            Amount = invoice.Amount,
+            IssuedAt = invoice.IssuedAt
+        };
+    }
+
     private void EnsureCanAccess(Booking booking)
     {
         if (_currentUser.IsAdmin)
@@ -170,6 +214,13 @@ public class BookingService : IBookingService
     private static string GenerateBookingReference()
     {
         return $"VYG-{Guid.NewGuid():N}"
+            .Substring(0, 16)
+            .ToUpperInvariant();
+    }
+
+    private static string GenerateInvoiceNumber()
+    {
+        return $"INV-{Guid.NewGuid():N}"
             .Substring(0, 16)
             .ToUpperInvariant();
     }
