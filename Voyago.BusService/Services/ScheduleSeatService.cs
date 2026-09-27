@@ -123,4 +123,111 @@ public class ScheduleSeatService : IScheduleSeatService
             })
             .ToListAsync();
     }
+
+    public async Task<List<ScheduleSeatInfo>> ReserveForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds)
+    {
+        var seatIds = scheduleSeatIds
+            .Distinct()
+            .OrderBy(id => id)
+            .ToList();
+
+        if (seatIds.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one schedule seat is required.",
+                nameof(scheduleSeatIds));
+        }
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction =await _db.Database.BeginTransactionAsync();
+
+            var schedule = await _db.Schedules
+                .AsNoTracking()
+                .Where(schedule => schedule.Id == scheduleId)
+                .Select(schedule => new
+                {
+                    schedule.Id,
+                    schedule.Status,
+                    BusIsActive = schedule.Bus.IsActive
+                })
+                .SingleOrDefaultAsync();
+
+            if (schedule is null)
+            {
+                throw new KeyNotFoundException(
+                    "Schedule not found.");
+            }
+
+            if (schedule.Status != ScheduleStatus.Scheduled)
+            {
+                throw new InvalidOperationException(
+                    $"Schedule cannot be booked because its status is '{schedule.Status}'.");
+            }
+
+            if (!schedule.BusIsActive)
+            {
+                throw new InvalidOperationException(
+                    "Schedule cannot be booked because the bus is inactive.");
+            }
+
+            var scheduleSeats = await _db.ScheduleSeats
+                .FromSqlInterpolated($"""
+                SELECT *
+                FROM "ScheduleSeats"
+                WHERE "ScheduleId" = {scheduleId}
+                  AND "Id" = ANY({seatIds.ToArray()})
+                ORDER BY "Id"
+                FOR UPDATE
+                """)
+                .Include(scheduleSeat => scheduleSeat.Seat)
+                .ToListAsync();
+
+            if (scheduleSeats.Count != seatIds.Count)
+            {
+                throw new KeyNotFoundException(
+                    "One or more requested schedule seats were not found.");
+            }
+
+            if (scheduleSeats.Any(scheduleSeat =>
+                !scheduleSeat.Seat.IsActive))
+            {
+                throw new InvalidOperationException(
+                    "One or more requested seats are inactive.");
+            }
+
+            if (scheduleSeats.Any(scheduleSeat =>
+                scheduleSeat.Status != ScheduleSeatStatus.Available))
+            {
+                throw new InvalidOperationException(
+                    "One or more requested seats are no longer available.");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+
+            foreach (var scheduleSeat in scheduleSeats)
+            {
+                scheduleSeat.Status = ScheduleSeatStatus.Booked;
+                scheduleSeat.UpdatedAt = now;
+            }
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return scheduleSeats
+                .Select(scheduleSeat => new ScheduleSeatInfo
+                {
+                    ScheduleSeatId = scheduleSeat.Id,
+                    ScheduleId = scheduleSeat.ScheduleId,
+                    SeatId = scheduleSeat.SeatId,
+                    SeatNumber = scheduleSeat.Seat.SeatNumber,
+                    Price = scheduleSeat.Price,
+                    Status = scheduleSeat.Status.ToString()
+                })
+                .ToList();
+        });
+    }
 }

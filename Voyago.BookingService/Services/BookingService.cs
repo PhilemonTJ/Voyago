@@ -34,21 +34,7 @@ public class BookingService : IBookingService
                 "At least one seat must be selected.");
         }
 
-        var seats = await _busServiceClient.GetScheduleSeatsAsync(request.ScheduleId, scheduleSeatIds);
-
-        if (seats.Count != scheduleSeatIds.Count)
-        {
-            throw new InvalidOperationException("One or more selected seats are invalid.");
-        }
-
-        var unavailableSeats = seats
-            .Where(seat => seat.Status != "Available")
-            .ToList();
-
-        if (unavailableSeats.Count > 0)
-        {
-            throw new InvalidOperationException("One or more selected seats are no longer available.");
-        }
+        var seats = await _busServiceClient.ReserveScheduleSeatsAsync(request.ScheduleId, scheduleSeatIds);
 
         var now = DateTimeOffset.UtcNow;
 

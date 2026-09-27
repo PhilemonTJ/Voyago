@@ -8,4 +8,6 @@ public interface IScheduleSeatService
     Task<List<ScheduleSeatResponseDto>> GetByScheduleIdAsync(Guid scheduleId);
 
     Task<List<ScheduleSeatInfo>> GetForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds);
+
+    Task<List<ScheduleSeatInfo>> ReserveForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds);
 }

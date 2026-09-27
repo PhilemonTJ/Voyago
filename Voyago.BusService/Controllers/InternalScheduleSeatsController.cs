@@ -60,4 +60,54 @@ public class InternalScheduleSeatsController : ControllerBase
                 detail: ex.Message);
         }
     }
+
+    [HttpPost("reserve")]
+    public async Task<ActionResult<List<ScheduleSeatInfo>>> Reserve(
+       Guid scheduleId,
+       [FromBody] List<Guid> scheduleSeatIds)
+    {
+        if (scheduleSeatIds is null || scheduleSeatIds.Count == 0)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "No seats provided.",
+                detail: "At least one schedule seat must be provided.");
+        }
+
+        try
+        {
+            var requestedIds = scheduleSeatIds.Distinct().ToList();
+
+            var seats = await _scheduleSeatService.ReserveForBookingAsync(scheduleId, requestedIds);
+
+            return Ok(seats);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid reservation request",
+                Detail = ex.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Schedule not found",
+                Detail = ex.Message,
+                Status = StatusCodes.Status404NotFound
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Seat reservation conflict",
+                Detail = ex.Message,
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+    }
 }

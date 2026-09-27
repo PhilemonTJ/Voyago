@@ -12,12 +12,31 @@ public class BusServiceClient : IBusServiceClient
         _httpClientFactory = httpClientFactory;
     }
 
-    public async Task<List<ScheduleSeatInfo>> GetScheduleSeatsAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds)
+    public async Task<List<ScheduleSeatInfo>> GetScheduleSeatsAsync(
+        Guid scheduleId, 
+        IEnumerable<Guid> scheduleSeatIds)
     {
         var client = _httpClientFactory.CreateClient("bus-service");
 
         var response = await client.PostAsJsonAsync(
             $"api/internal/schedules/{scheduleId}/seats/validate",
+            scheduleSeatIds);
+
+        response.EnsureSuccessStatusCode();
+
+        return await response.Content
+            .ReadFromJsonAsync<List<ScheduleSeatInfo>>()
+            ?? new List<ScheduleSeatInfo>();
+    }
+
+    public async Task<List<ScheduleSeatInfo>> ReserveScheduleSeatsAsync(
+        Guid scheduleId,
+        IEnumerable<Guid> scheduleSeatIds)
+    {
+        var client = _httpClientFactory.CreateClient("bus-service");
+
+        var response = await client.PostAsJsonAsync(
+            $"api/internal/schedules/{scheduleId}/seats/reserve",
             scheduleSeatIds);
 
         response.EnsureSuccessStatusCode();
