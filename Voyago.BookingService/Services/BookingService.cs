@@ -112,6 +112,7 @@ public class BookingService : IBookingService
     public async Task<bool> CancelAsync(Guid bookingId)
     {
         var booking = await _db.Bookings
+            .Include(booking => booking.BookingSeats)
             .FirstOrDefaultAsync(
                 booking => booking.Id == bookingId);
 
@@ -133,9 +134,18 @@ public class BookingService : IBookingService
             throw new InvalidOperationException("This booking cannot be cancelled.");
         }
 
+        var scheduleSeatIds = booking.BookingSeats
+            .Select(seat => seat.ScheduleSeatId)
+            .Distinct()
+            .ToList();
+
+        await _busServiceClient.ReleaseScheduleSeatsAsync(booking.ScheduleId, scheduleSeatIds);
+
+        var now = DateTimeOffset.UtcNow;
+
         booking.Status = BookingStatus.Cancelled;
-        booking.CancelledAt = DateTimeOffset.UtcNow;
-        booking.UpdatedAt = DateTimeOffset.UtcNow;
+        booking.CancelledAt = now;
+        booking.UpdatedAt = now;
 
         await _db.SaveChangesAsync();
 

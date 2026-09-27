@@ -45,4 +45,17 @@ public class BusServiceClient : IBusServiceClient
             .ReadFromJsonAsync<List<ScheduleSeatInfo>>()
             ?? new List<ScheduleSeatInfo>();
     }
+
+    public async Task ReleaseScheduleSeatsAsync(
+        Guid scheduleId,
+        IEnumerable<Guid> scheduleSeatIds)
+    {
+        var client = _httpClientFactory.CreateClient("bus-service");
+
+        var response = await client.PostAsJsonAsync(
+            $"api/internal/schedules/{scheduleId}/seats/release",
+            scheduleSeatIds);
+
+        response.EnsureSuccessStatusCode();
+    }
 }

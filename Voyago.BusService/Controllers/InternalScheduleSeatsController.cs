@@ -110,4 +110,54 @@ public class InternalScheduleSeatsController : ControllerBase
             });
         }
     }
+
+    [HttpPost("release")]
+    public async Task<IActionResult> Release(
+        Guid scheduleId, 
+        [FromBody] List<Guid> scheduleSeatIds)
+    {
+        if (scheduleSeatIds is null || scheduleSeatIds.Count == 0)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "No seats provided.",
+                detail: "At least one schedule seat must be provided.");
+        }
+
+        try
+        {
+            var requestedIds = scheduleSeatIds.Distinct().ToList();
+
+            await _scheduleSeatService.ReleaseAsync(scheduleId, requestedIds);
+
+            return NoContent();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid release request",
+                Detail = ex.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Schedule not found",
+                Detail = ex.Message,
+                Status = StatusCodes.Status404NotFound
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Seat release conflict",
+                Detail = ex.Message,
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+    }
 }
