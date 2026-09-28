@@ -75,6 +75,8 @@ builder.Services.AddScoped<IBusServiceClient, BusServiceClient>();
 
 builder.Services.AddSingleton<IEventPublisher, AzureServiceBusEventPublisher>();
 
+builder.Services.AddHostedService<OutboxWorker>();
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();
 
