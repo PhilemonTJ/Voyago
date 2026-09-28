@@ -4,8 +4,10 @@ using Voyago.BookingService.Data;
 using Voyago.BookingService.DTOs.Bookings;
 using Voyago.BookingService.DTOs.Invoices;
 using Voyago.BookingService.Exceptions;
+using Voyago.BookingService.Messaging;
 using Voyago.BookingService.Models;
 using Voyago.BookingService.Services.Interfaces;
+using Voyago.Shared.Contracts.Events;
 
 namespace Voyago.BookingService.Services;
 
@@ -14,15 +16,18 @@ public class BookingService : IBookingService
     private readonly BookingDbContext _db;
     private readonly IBusServiceClient _busServiceClient;
     private readonly ICurrentUser _currentUser;
+    private readonly IEventPublisher _eventPublisher;
 
     public BookingService(
         BookingDbContext db,
         IBusServiceClient busServiceClient,
-        ICurrentUser currentUser)
+        ICurrentUser currentUser,
+        IEventPublisher eventPublisher)
     {
         _db = db;
         _busServiceClient = busServiceClient;
         _currentUser = currentUser;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<BookingResponseDto> CreateAsync(CreateBookingRequestDto request)
@@ -77,6 +82,21 @@ public class BookingService : IBookingService
         _db.Invoices.Add(invoice);
 
         await _db.SaveChangesAsync();
+
+        var bookingCreatedEvent = new BookingCreatedEvent
+        {
+            BookingId = booking.Id,
+            UserId = booking.UserId,
+            ScheduleId = booking.ScheduleId,
+            BookingReference = booking.BookingReference,
+            TotalAmount = booking.TotalAmount,
+            CreatedAt = booking.CreatedAt,
+            ScheduleSeatIds = booking.BookingSeats
+                .Select(seat => seat.ScheduleSeatId)
+                .ToList()
+        };
+
+        await _eventPublisher.PublishAsync(bookingCreatedEvent);
 
         return MapToResponse(booking);
     }

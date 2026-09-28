@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using Voyago.BookingService.Clients.BusService;
 using Voyago.BookingService.Data;
+using Voyago.BookingService.Messaging;
 using Voyago.BookingService.Services;
 using Voyago.BookingService.Services.Interfaces;
 using Voyago.BusService.Configuration;
@@ -13,6 +14,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 builder.Services.AddProblemDetails();
+
+builder.AddAzureServiceBusClient("servicebus");
 
 builder.AddNpgsqlDbContext<BookingDbContext>(connectionName: "bookingdb");
 
@@ -69,6 +72,8 @@ builder.Services.AddHttpClient("bus-service", client =>
 });
 
 builder.Services.AddScoped<IBusServiceClient, BusServiceClient>();
+
+builder.Services.AddSingleton<IEventPublisher, AzureServiceBusEventPublisher>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUser>();

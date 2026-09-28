@@ -29,6 +29,7 @@ var bookingService = builder.AddProject<Projects.Voyago_BookingService>("booking
     .WithReference(bookingDb)
     .WithReference(busService)
     .WithReference(serviceBus)
-    .WaitFor(bookingDb);
+    .WaitFor(bookingDb)
+    .WaitFor(serviceBus);
 
 builder.Build().Run();
