@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Serialization;
 using Voyago.BookingService.Clients.BusService;
 using Voyago.BookingService.Data;
+using Voyago.BookingService.Exceptions;
 using Voyago.BookingService.Messaging;
 using Voyago.BookingService.Services;
 using Voyago.BookingService.Services.Interfaces;
@@ -14,6 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.AddAzureServiceBusClient("servicebus");
 

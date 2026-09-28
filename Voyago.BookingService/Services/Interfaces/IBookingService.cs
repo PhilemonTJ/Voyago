@@ -11,7 +11,7 @@ public interface IBookingService
 
     Task<List<BookingSummaryResponseDto>> GetMyBookingsAsync();
 
-    Task<bool> CancelAsync(Guid bookingId);
+    Task CancelAsync(Guid bookingId);
 
     Task<InvoiceResponseDto?> GetInvoiceAsync(Guid bookingId);
 }

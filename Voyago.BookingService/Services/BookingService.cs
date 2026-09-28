@@ -5,7 +5,6 @@ using Voyago.BookingService.Data;
 using Voyago.BookingService.DTOs.Bookings;
 using Voyago.BookingService.DTOs.Invoices;
 using Voyago.BookingService.Exceptions;
-using Voyago.BookingService.Messaging;
 using Voyago.BookingService.Models;
 using Voyago.BookingService.Services.Interfaces;
 using Voyago.Shared.Contracts.Events;
@@ -34,11 +33,19 @@ public class BookingService : IBookingService
 
         if (scheduleSeatIds.Count == 0)
         {
-            throw new ArgumentException(
-                "At least one seat must be selected.");
+            throw new ArgumentException("At least one seat must be selected.");
         }
 
         var seats = await _busServiceClient.ReserveScheduleSeatsAsync(request.ScheduleId, scheduleSeatIds);
+
+        var reservedSeatIds = seats
+            .Select(seat => seat.ScheduleSeatId)
+            .ToHashSet();
+
+        if (!scheduleSeatIds.All(reservedSeatIds.Contains))
+        {
+            throw new BusinessConflictException("The requested seats could not be reserved.");
+        }
 
         var now = DateTimeOffset.UtcNow;
 
@@ -145,7 +152,7 @@ public class BookingService : IBookingService
             .ToListAsync();
     }
 
-    public async Task<bool> CancelAsync(Guid bookingId)
+    public async Task CancelAsync(Guid bookingId)
     {
         var booking = await _db.Bookings
             .Include(booking => booking.BookingSeats)
@@ -154,20 +161,20 @@ public class BookingService : IBookingService
 
         if (booking is null)
         {
-            return false;
+            throw new ResourceNotFoundException("The requested booking could not be found.");
         }
 
         EnsureCanAccess(booking);
 
         if (booking.Status == BookingStatus.Cancelled)
         {
-            throw new InvalidOperationException("Booking is already cancelled.");
+            throw new BusinessConflictException("Booking is already cancelled.");
         }
 
         if (booking.Status != BookingStatus.Pending &&
             booking.Status != BookingStatus.Confirmed)
         {
-            throw new InvalidOperationException("This booking cannot be cancelled.");
+            throw new BusinessConflictException("This booking cannot be cancelled.");
         }
 
         var scheduleSeatIds = booking.BookingSeats
@@ -184,8 +191,6 @@ public class BookingService : IBookingService
         booking.UpdatedAt = now;
 
         await _db.SaveChangesAsync();
-
-        return true;
     }
 
     public async Task<InvoiceResponseDto?> GetInvoiceAsync(Guid bookingId)
@@ -196,7 +201,7 @@ public class BookingService : IBookingService
 
         if (booking is null)
         {
-            return null;
+            throw new ResourceNotFoundException("The requested booking could not be found.");
         }
 
         EnsureCanAccess(booking);

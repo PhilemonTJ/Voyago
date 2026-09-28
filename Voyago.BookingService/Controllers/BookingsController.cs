@@ -2,7 +2,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Voyago.BookingService.DTOs.Bookings;
 using Voyago.BookingService.DTOs.Invoices;
-using Voyago.BookingService.Exceptions;
 using Voyago.BookingService.Services.Interfaces;
 
 namespace Voyago.BookingService.Controllers;
@@ -23,33 +22,13 @@ public class BookingsController : ControllerBase
     [Authorize(Roles = "Passenger")]
     public async Task<ActionResult<BookingResponseDto>> Create(CreateBookingRequestDto request)
     {
-        try
-        {
-            var booking = await _bookingService.CreateAsync(request);
 
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = booking.Id },
-                booking);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Invalid booking request",
-                Detail = ex.Message,
-                Status = StatusCodes.Status400BadRequest
-            });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new ProblemDetails
-            {
-                Title = "Booking conflict",
-                Detail = ex.Message,
-                Status = StatusCodes.Status409Conflict
-            });
-        }
+        var booking = await _bookingService.CreateAsync(request);
+
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = booking.Id },
+            booking);
     }
 
     [HttpGet("my")]
@@ -65,57 +44,23 @@ public class BookingsController : ControllerBase
     [Authorize]
     public async Task<ActionResult<BookingResponseDto>> GetById(Guid id)
     {
-        try
-        {
-            var booking = await _bookingService.GetByIdAsync(id);
+        var booking = await _bookingService.GetByIdAsync(id);
 
-            if (booking is null)
-            {
-                return NotFound();
-            }
-
-            return Ok(booking);
-        }
-        catch (ForbiddenException ex)
+        if (booking is null)
         {
-            return Problem(
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden",
-                detail: ex.Message);
+            return NotFound();
         }
+
+        return Ok(booking);
     }
 
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = "Passenger")]
     public async Task<IActionResult> Cancel(Guid id)
     {
-        try
-        {
-            var cancelled = await _bookingService.CancelAsync(id);
+        await _bookingService.CancelAsync(id);
 
-            if (!cancelled)
-            {
-                return NotFound();
-            }
-
-            return NoContent();
-        }
-        catch (ForbiddenException ex)
-        {
-            return Problem(
-                statusCode: StatusCodes.Status403Forbidden,
-                title: "Forbidden",
-                detail: ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(new ProblemDetails
-            {
-                Title = "Booking conflict",
-                Detail = ex.Message,
-                Status = StatusCodes.Status409Conflict
-            });
-        }
+        return NoContent();
     }
 
     [HttpGet("{bookingId:guid}/invoice")]
@@ -126,12 +71,7 @@ public class BookingsController : ControllerBase
 
         if (invoice is null)
         {
-            return NotFound(new ProblemDetails
-            {
-                Title = "Invoice not found",
-                Detail = "The requested invoice could not be found.",
-                Status = StatusCodes.Status404NotFound
-            });
+            return NotFound();
         }
 
         return Ok(invoice);
