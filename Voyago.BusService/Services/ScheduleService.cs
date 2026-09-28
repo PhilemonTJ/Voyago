@@ -207,6 +207,21 @@ public class ScheduleService : IScheduleService
             return null;
         }
 
+        if (schedule.Status != ScheduleStatus.Scheduled)
+        {
+            throw new InvalidOperationException($"A schedule cannot be updated because its status is '{schedule.Status}'.");
+        }
+
+        var hasBookedSeats = await _db.ScheduleSeats
+            .AnyAsync(scheduleSeat =>
+                scheduleSeat.ScheduleId == id &&
+                scheduleSeat.Status == ScheduleSeatStatus.Booked);
+
+        if (hasBookedSeats)
+        {
+            throw new InvalidOperationException("A schedule with booked seats cannot be updated.");
+        }
+
         var bus = await _db.Buses
             .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
 
@@ -289,7 +304,7 @@ public class ScheduleService : IScheduleService
         var schedule = await _db.Schedules
             .FirstOrDefaultAsync(schedule => schedule.Id == id);
 
-        if (schedule is null)
+        if (schedule is null || schedule.Status != ScheduleStatus.Scheduled)
         {
             return false;
         }
@@ -303,6 +318,16 @@ public class ScheduleService : IScheduleService
         }
 
         EnsureCanManageBus(bus);
+
+        var hasBookedSeats = await _db.ScheduleSeats
+            .AnyAsync(scheduleSeat =>
+                scheduleSeat.ScheduleId == id &&
+                scheduleSeat.Status == ScheduleSeatStatus.Booked);
+
+        if (hasBookedSeats)
+        {
+            throw new InvalidOperationException("A schedule with booked seats cannot be cancelled.");
+        }
 
         schedule.Status = ScheduleStatus.Cancelled;
         schedule.UpdatedAt = DateTimeOffset.UtcNow;

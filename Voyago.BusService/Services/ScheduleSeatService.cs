@@ -175,13 +175,13 @@ public class ScheduleSeatService : IScheduleSeatService
 
             var scheduleSeats = await _db.ScheduleSeats
                 .FromSqlInterpolated($"""
-                SELECT *
-                FROM "ScheduleSeats"
-                WHERE "ScheduleId" = {scheduleId}
-                  AND "Id" = ANY({seatIds.ToArray()})
-                ORDER BY "Id"
-                FOR UPDATE
-                """)
+                    SELECT *
+                    FROM "ScheduleSeats"
+                    WHERE "ScheduleId" = {scheduleId}
+                      AND "Id" = ANY({seatIds.ToArray()})
+                    ORDER BY "Id"
+                    FOR UPDATE
+                    """)
                 .Include(scheduleSeat => scheduleSeat.Seat)
                 .ToListAsync();
 
@@ -282,13 +282,13 @@ public class ScheduleSeatService : IScheduleSeatService
 
             var seats = await _db.ScheduleSeats
                 .FromSqlInterpolated($"""
-            SELECT *
-            FROM "ScheduleSeats"
-            WHERE "ScheduleId" = {scheduleId}
-              AND "Id" = ANY({seatIds.ToArray()})
-            ORDER BY "Id"
-            FOR UPDATE
-            """)
+                    SELECT *
+                    FROM "ScheduleSeats"
+                    WHERE "ScheduleId" = {scheduleId}
+                      AND "Id" = ANY({seatIds.ToArray()})
+                    ORDER BY "Id"
+                    FOR UPDATE
+                    """)
                 .ToListAsync();
 
             if (seats.Count != seatIds.Count)

@@ -105,6 +105,17 @@ public class StopService : IStopService
             throw new InvalidOperationException("A stop with this name already exists in this city.");
         }
 
+        var hasSchedules = await _db.Schedules
+            .AnyAsync(schedule =>
+                schedule.OriginStopId == id ||
+                schedule.DestinationStopId == id);
+
+        if (hasSchedules)
+        {
+            throw new InvalidOperationException(
+                "A stop that is assigned to a schedule cannot be modified.");
+        }
+
         stop.Name = name;
         stop.City = city;
         stop.UpdatedAt = DateTimeOffset.UtcNow;
@@ -121,6 +132,17 @@ public class StopService : IStopService
         if (stop is null)
         {
             return false;
+        }
+
+        var hasSchedules = await _db.Schedules
+            .AnyAsync(schedule =>
+                schedule.OriginStopId == id ||
+                schedule.DestinationStopId == id);
+
+        if (hasSchedules)
+        {
+            throw new InvalidOperationException(
+                "A stop that is assigned to a schedule cannot be deactivated.");
         }
 
         stop.IsActive = false;

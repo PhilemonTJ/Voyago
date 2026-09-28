@@ -233,6 +233,22 @@ public class BusService : IBusService
             throw new InvalidOperationException("This bus number already exists for the operator.");
         }
 
+        var hasSchedules = await _db.Schedules
+            .AnyAsync(schedule => schedule.BusId == id);
+
+        var changesStructure =
+            bus.RegistrationNumber != request.RegistrationNumber.Trim() ||
+            bus.BusNumber != request.BusNumber.Trim() ||
+            bus.BusType != request.BusType ||
+            bus.TotalSeats != request.TotalSeats ||
+            bus.TotalRows != request.TotalRows ||
+            bus.TotalColumns != request.TotalColumns;
+
+        if (hasSchedules && changesStructure)
+        {
+            throw new InvalidOperationException("A bus with assigned schedules cannot have its structural configuration modified.");
+        }
+
         bus.RegistrationNumber = request.RegistrationNumber.Trim();
         bus.BusNumber = request.BusNumber.Trim();
         bus.BusName = request.BusName?.Trim();
@@ -263,6 +279,14 @@ public class BusService : IBusService
         if (!bus.IsActive)
         {
             return false;
+        }
+
+        var hasSchedules = await _db.Schedules
+            .AnyAsync(schedule => schedule.BusId == id);
+
+        if (hasSchedules)
+        {
+            throw new InvalidOperationException("A bus that is assigned to a schedule cannot be deactivated.");
         }
 
         bus.IsActive = false;

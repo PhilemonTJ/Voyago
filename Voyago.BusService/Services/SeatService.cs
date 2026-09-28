@@ -206,6 +206,14 @@ public class SeatService : ISeatService
             throw new InvalidOperationException("A seat with this number already exists on the bus.");
         }
 
+        var hasSchedules = await _db.ScheduleSeats.AnyAsync(scheduleSeat => scheduleSeat.SeatId == seatId);
+
+        if (hasSchedules)
+        {
+            throw new InvalidOperationException(
+                "A seat that is assigned to a schedule cannot be modified.");
+        }
+
         var level = GetLevel(request.SeatType);
 
         var coordinateExists = await _db.Seats
@@ -253,6 +261,13 @@ public class SeatService : ISeatService
         if (!seat.IsActive)
         {
             return false;
+        }
+
+        var hasSchedules = await _db.ScheduleSeats.AnyAsync(scheduleSeat => scheduleSeat.SeatId == seatId);
+
+        if (hasSchedules)
+        {
+            throw new InvalidOperationException("A seat that is assigned to a schedule cannot be deactivated.");
         }
 
         seat.IsActive = false;
