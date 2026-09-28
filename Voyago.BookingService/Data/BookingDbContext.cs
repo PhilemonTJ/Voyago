@@ -13,6 +13,7 @@ public class BookingDbContext : DbContext
     public DbSet<Booking> Bookings { get; set; }
     public DbSet<BookingSeat> BookingSeats { get; set; }
     public DbSet<Invoice> Invoices { get; set; }
+    public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -101,6 +102,26 @@ public class BookingDbContext : DbContext
 
             entity.HasIndex(invoice => invoice.InvoiceNumber)
                 .IsUnique();
+        });
+
+        modelBuilder.Entity<OutboxMessage>(entity =>
+        {
+            entity.HasKey(message => message.Id);
+
+            entity.Property(message => message.EventType)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(message => message.Payload)
+                .IsRequired();
+
+            entity.Property(message => message.CreatedAt)
+                .IsRequired();
+
+            entity.Property(message => message.ProcessedAt);
+
+            entity.HasIndex(message => message.ProcessedAt);
+            entity.HasIndex(message => message.CreatedAt);
         });
     }
 }

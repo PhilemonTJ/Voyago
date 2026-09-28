@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Voyago.BookingService.Clients.BusService;
 using Voyago.BookingService.Data;
 using Voyago.BookingService.DTOs.Bookings;
@@ -16,18 +17,15 @@ public class BookingService : IBookingService
     private readonly BookingDbContext _db;
     private readonly IBusServiceClient _busServiceClient;
     private readonly ICurrentUser _currentUser;
-    private readonly IEventPublisher _eventPublisher;
 
     public BookingService(
         BookingDbContext db,
         IBusServiceClient busServiceClient,
-        ICurrentUser currentUser,
-        IEventPublisher eventPublisher)
+        ICurrentUser currentUser)
     {
         _db = db;
         _busServiceClient = busServiceClient;
         _currentUser = currentUser;
-        _eventPublisher = eventPublisher;
     }
 
     public async Task<BookingResponseDto> CreateAsync(CreateBookingRequestDto request)
@@ -78,11 +76,6 @@ public class BookingService : IBookingService
             });
         }
 
-        _db.Bookings.Add(booking);
-        _db.Invoices.Add(invoice);
-
-        await _db.SaveChangesAsync();
-
         var bookingCreatedEvent = new BookingCreatedEvent
         {
             BookingId = booking.Id,
@@ -96,7 +89,19 @@ public class BookingService : IBookingService
                 .ToList()
         };
 
-        await _eventPublisher.PublishAsync(bookingCreatedEvent);
+        var outboxMessage = new OutboxMessage
+        {
+            Id = Guid.NewGuid(),
+            EventType = nameof(BookingCreatedEvent),
+            Payload = JsonSerializer.Serialize(bookingCreatedEvent),
+            CreatedAt = now
+        };
+
+        _db.Bookings.Add(booking);
+        _db.Invoices.Add(invoice);
+        _db.OutboxMessages.Add(outboxMessage);
+
+        await _db.SaveChangesAsync();
 
         return MapToResponse(booking);
     }
