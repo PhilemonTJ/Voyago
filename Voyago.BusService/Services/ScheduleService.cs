@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Schedules;
 using Voyago.BusService.Exceptions;
@@ -127,7 +128,15 @@ public class ScheduleService : IScheduleService
             });
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+            when (IsScheduleOverlapViolation(exception))
+        {
+            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
+        }
 
         return MapToResponse(schedule);
     }
@@ -294,7 +303,15 @@ public class ScheduleService : IScheduleService
             scheduleSeat.UpdatedAt = datetimeNow;
         }
 
-        await _db.SaveChangesAsync();
+        try
+        {
+            await _db.SaveChangesAsync();
+        }
+        catch (DbUpdateException exception)
+            when (IsScheduleOverlapViolation(exception))
+        {
+            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
+        }
 
         return MapToResponse(schedule);
     }
@@ -403,6 +420,7 @@ public class ScheduleService : IScheduleService
             })
             .ToListAsync();
     }
+
     private void EnsureCanManageBus(Bus bus)
     {
         if (_currentUser.IsAdmin)
@@ -424,6 +442,13 @@ public class ScheduleService : IScheduleService
             throw new InvalidOperationException(
                 "Arrival time must be after departure time.");
         }
+    }
+
+    private static bool IsScheduleOverlapViolation(DbUpdateException exception)
+    {
+        return exception.InnerException is PostgresException postgresException &&
+               postgresException.SqlState == PostgresErrorCodes.ExclusionViolation &&
+               postgresException.ConstraintName == "CK_Schedules_NoOverlappingActiveSchedules";
     }
 
     private static ScheduleResponseDto MapToResponse(Schedule schedule)
