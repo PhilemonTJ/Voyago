@@ -145,14 +145,12 @@ public class ScheduleSeatService : IScheduleSeatService
             await using var transaction =await _db.Database.BeginTransactionAsync();
 
             var schedule = await _db.Schedules
-                .AsNoTracking()
-                .Where(schedule => schedule.Id == scheduleId)
-                .Select(schedule => new
-                {
-                    schedule.Id,
-                    schedule.Status,
-                    BusIsActive = schedule.Bus.IsActive
-                })
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Schedules"
+                    WHERE "Id" = {scheduleId}
+                    FOR UPDATE
+                    """)
                 .SingleOrDefaultAsync();
 
             if (schedule is null)
@@ -167,7 +165,12 @@ public class ScheduleSeatService : IScheduleSeatService
                     $"Schedule cannot be booked because its status is '{schedule.Status}'.");
             }
 
-            if (!schedule.BusIsActive)
+            var busIsActive = await _db.Buses
+                .Where(bus => bus.Id == schedule.BusId)
+                .Select(bus => bus.IsActive)
+                .SingleAsync();
+
+            if (!busIsActive)
             {
                 throw new InvalidOperationException(
                     "Schedule cannot be booked because the bus is inactive.");
@@ -252,14 +255,12 @@ public class ScheduleSeatService : IScheduleSeatService
             await _db.Database.BeginTransactionAsync();
 
             var schedule = await _db.Schedules
-                .AsNoTracking()
-                .Where(schedule => schedule.Id == scheduleId)
-                .Select(schedule => new
-                {
-                    schedule.Id,
-                    schedule.Status,
-                    BusIsActive = schedule.Bus.IsActive
-                })
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Schedules"
+                    WHERE "Id" = {scheduleId}
+                    FOR UPDATE
+                    """)
                 .SingleOrDefaultAsync();
 
             if (schedule is null)
@@ -274,7 +275,12 @@ public class ScheduleSeatService : IScheduleSeatService
                     $"Schedule cannot be modified because its status is '{schedule.Status}'.");
             }
 
-            if (!schedule.BusIsActive)
+            var busIsActive = await _db.Buses
+                .Where(bus => bus.Id == schedule.BusId)
+                .Select(bus => bus.IsActive)
+                .SingleAsync();
+
+            if (!busIsActive)
             {
                 throw new InvalidOperationException(
                     "Schedule cannot be modified because the bus is inactive.");

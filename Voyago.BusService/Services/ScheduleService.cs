@@ -33,112 +33,143 @@ public class ScheduleService : IScheduleService
             throw new InvalidOperationException("Origin and destination stops must be different.");
         }
 
-        var bus = await _db.Buses
-            .FirstOrDefaultAsync(bus => bus.Id == request.BusId);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (bus is null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            throw new KeyNotFoundException("Bus not found.");
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {request.BusId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (!bus.IsActive)
-        {
-            throw new InvalidOperationException("Cannot create a schedule for an inactive bus.");
-        }
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
-        var seats = await _db.Seats
-            .Where(seat =>
-                seat.BusId == request.BusId &&
-                seat.IsActive)
-            .ToListAsync();
+            EnsureCanManageBus(bus);
 
-        if (seats.Count == 0)
-        {
-            throw new InvalidOperationException("Cannot create a schedule for a bus with no active seats.");
-        }
+            if (!bus.IsActive)
+            {
+                throw new InvalidOperationException("Cannot create a schedule for an inactive bus.");
+            }
 
-        var originStop = await _db.Stops
-            .FirstOrDefaultAsync(stop =>
-                stop.Id == request.OriginStopId);
+            var seats = await _db.Seats
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Seats"
+                    WHERE "BusId" = {request.BusId}
+                      AND "IsActive" = TRUE
+                    ORDER BY "Id"
+                    FOR UPDATE
+                    """)
+                .ToListAsync();
 
-        if (originStop is null)
-        {
-            throw new KeyNotFoundException("Origin stop not found.");
-        }
+            if (seats.Count == 0)
+            {
+                throw new InvalidOperationException("Cannot create a schedule for a bus with no active seats.");
+            }
 
-        if (!originStop.IsActive)
-        {
-            throw new InvalidOperationException("The origin stop is inactive.");
-        }
+            var stopIds = new[]
+                {
+                    request.OriginStopId,
+                    request.DestinationStopId
+                }
+                .Distinct()
+                .OrderBy(id => id)
+                .ToArray();
 
-        var destinationStop = await _db.Stops
-            .FirstOrDefaultAsync(stop =>
-                stop.Id == request.DestinationStopId);
+            var stops = await _db.Stops
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Stops"
+                    WHERE "Id" = ANY({stopIds})
+                    ORDER BY "Id"
+                    FOR UPDATE
+                    """)
+                .ToListAsync();
 
-        if (destinationStop is null)
-        {
-            throw new KeyNotFoundException("Destination stop not found.");
-        }
+            if (stops.Count != 2)
+            {
+                throw new KeyNotFoundException("Origin or destination stop not found.");
+            }
 
-        if (!destinationStop.IsActive)
-        {
-            throw new InvalidOperationException("The destination stop is inactive.");
-        }
+            var originStop = stops.Single(stop => stop.Id == request.OriginStopId);
 
-        var overlaps = await _db.Schedules
-            .AnyAsync(schedule =>
-                schedule.BusId == request.BusId &&
-                schedule.Status != ScheduleStatus.Cancelled &&
-                departureTime < schedule.ArrivalTime &&
-                arrivalTime > schedule.DepartureTime);
+            var destinationStop = stops.Single(stop => stop.Id == request.DestinationStopId);
 
-        if (overlaps)
-        {
-            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
-        }
+            if (!originStop.IsActive)
+            {
+                throw new InvalidOperationException("The origin stop is inactive.");
+            }
 
-        var datetimeNow = DateTimeOffset.UtcNow;
+            if (!destinationStop.IsActive)
+            {
+                throw new InvalidOperationException("The destination stop is inactive.");
+            }
 
-        var schedule = new Schedule
-        {
-            Id = Guid.NewGuid(),
-            BusId = request.BusId,
-            OriginStopId = request.OriginStopId,
-            DestinationStopId = request.DestinationStopId,
-            DepartureTime = departureTime,
-            ArrivalTime = arrivalTime,
-            BaseSeatPrice = request.BaseSeatPrice,
-            Status = ScheduleStatus.Scheduled,
-            CreatedAt = datetimeNow
-        };
+            var overlaps = await _db.Schedules
+                .AnyAsync(schedule =>
+                    schedule.BusId == request.BusId &&
+                    schedule.Status != ScheduleStatus.Cancelled &&
+                    departureTime < schedule.ArrivalTime &&
+                    arrivalTime > schedule.DepartureTime);
 
-        _db.Schedules.Add(schedule);
+            if (overlaps)
+            {
+                throw new InvalidOperationException("The bus already has an overlapping active schedule.");
+            }
 
-        foreach (var seat in seats)
-        {
-            schedule.ScheduleSeats.Add(new ScheduleSeat
+            var datetimeNow = DateTimeOffset.UtcNow;
+
+            var schedule = new Schedule
             {
                 Id = Guid.NewGuid(),
-                SeatId = seat.Id,
-                Price = request.BaseSeatPrice,
-                Status = ScheduleSeatStatus.Available,
+                BusId = request.BusId,
+                OriginStopId = request.OriginStopId,
+                DestinationStopId = request.DestinationStopId,
+                DepartureTime = departureTime,
+                ArrivalTime = arrivalTime,
+                BaseSeatPrice = request.BaseSeatPrice,
+                Status = ScheduleStatus.Scheduled,
                 CreatedAt = datetimeNow
-            });
-        }
+            };
 
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException exception)
-            when (IsScheduleOverlapViolation(exception))
-        {
-            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
-        }
+            _db.Schedules.Add(schedule);
 
-        return MapToResponse(schedule);
+            foreach (var seat in seats)
+            {
+                schedule.ScheduleSeats.Add(new ScheduleSeat
+                {
+                    Id = Guid.NewGuid(),
+                    SeatId = seat.Id,
+                    Price = request.BaseSeatPrice,
+                    Status = ScheduleSeatStatus.Available,
+                    CreatedAt = datetimeNow
+                });
+            }
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException exception)
+                when (IsScheduleOverlapViolation(exception))
+            {
+                throw new InvalidOperationException("The bus already has an overlapping active schedule.");
+            }
+
+            await transaction.CommitAsync();
+
+            return MapToResponse(schedule);
+        }); 
     }
 
     public async Task<List<ScheduleResponseDto>> GetAllAsync()
@@ -208,150 +239,182 @@ public class ScheduleService : IScheduleService
             throw new InvalidOperationException("Origin and destination stops must be different.");
         }
 
-        var schedule = await _db.Schedules
-            .FirstOrDefaultAsync(schedule => schedule.Id == id);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (schedule is null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            return null;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        if (schedule.Status != ScheduleStatus.Scheduled)
-        {
-            throw new InvalidOperationException($"A schedule cannot be updated because its status is '{schedule.Status}'.");
-        }
+            var schedule = await _db.Schedules
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Schedules"
+                    WHERE "Id" = {id}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        var hasBookedSeats = await _db.ScheduleSeats
-            .AnyAsync(scheduleSeat =>
-                scheduleSeat.ScheduleId == id &&
-                scheduleSeat.Status == ScheduleSeatStatus.Booked);
+            if (schedule is null)
+            {
+                return null;
+            }
 
-        if (hasBookedSeats)
-        {
-            throw new InvalidOperationException("A schedule with booked seats cannot be updated.");
-        }
+            if (schedule.Status != ScheduleStatus.Scheduled)
+            {
+                throw new InvalidOperationException($"A schedule cannot be updated because its status is '{schedule.Status}'.");
+            }
 
-        var bus = await _db.Buses
-            .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
+            var hasBookedSeats = await _db.ScheduleSeats
+                .AnyAsync(scheduleSeat =>
+                    scheduleSeat.ScheduleId == id &&
+                    scheduleSeat.Status == ScheduleSeatStatus.Booked);
 
-        if (bus is null)
-        {
-            throw new KeyNotFoundException("Bus not found.");
-        }
+            if (hasBookedSeats)
+            {
+                throw new InvalidOperationException("A schedule with booked seats cannot be updated.");
+            }
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
 
-        var originStop = await _db.Stops
-            .FirstOrDefaultAsync(stop =>
-                stop.Id == request.OriginStopId);
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
-        if (originStop is null)
-        {
-            throw new KeyNotFoundException("Origin stop not found.");
-        }
+            EnsureCanManageBus(bus);
 
-        if (!originStop.IsActive)
-        {
-            throw new InvalidOperationException("The origin stop is inactive.");
-        }
+            var originStop = await _db.Stops
+                .FirstOrDefaultAsync(stop =>
+                    stop.Id == request.OriginStopId);
 
-        var destinationStop = await _db.Stops
-            .FirstOrDefaultAsync(stop =>
-                stop.Id == request.DestinationStopId);
+            if (originStop is null)
+            {
+                throw new KeyNotFoundException("Origin stop not found.");
+            }
 
-        if (destinationStop is null)
-        {
-            throw new KeyNotFoundException("Destination stop not found.");
-        }
+            if (!originStop.IsActive)
+            {
+                throw new InvalidOperationException("The origin stop is inactive.");
+            }
 
-        if (!destinationStop.IsActive)
-        {
-            throw new InvalidOperationException("The destination stop is inactive.");
-        }
+            var destinationStop = await _db.Stops
+                .FirstOrDefaultAsync(stop =>
+                    stop.Id == request.DestinationStopId);
 
-        var overlaps = await _db.Schedules
-            .AnyAsync(other =>
-                other.Id != id &&
-                other.BusId == schedule.BusId &&
-                other.Status != ScheduleStatus.Cancelled &&
-                departureTime < other.ArrivalTime &&
-                arrivalTime > other.DepartureTime);
+            if (destinationStop is null)
+            {
+                throw new KeyNotFoundException("Destination stop not found.");
+            }
 
-        if (overlaps)
-        {
-            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
-        }
+            if (!destinationStop.IsActive)
+            {
+                throw new InvalidOperationException("The destination stop is inactive.");
+            }
 
-        var datetimeNow = DateTimeOffset.UtcNow;
+            var overlaps = await _db.Schedules
+                .AnyAsync(other =>
+                    other.Id != id &&
+                    other.BusId == schedule.BusId &&
+                    other.Status != ScheduleStatus.Cancelled &&
+                    departureTime < other.ArrivalTime &&
+                    arrivalTime > other.DepartureTime);
 
-        schedule.OriginStopId = request.OriginStopId;
-        schedule.DestinationStopId = request.DestinationStopId;
-        schedule.DepartureTime = departureTime;
-        schedule.ArrivalTime = arrivalTime;
-        schedule.BaseSeatPrice = request.BaseSeatPrice;
-        schedule.UpdatedAt = datetimeNow;
+            if (overlaps)
+            {
+                throw new InvalidOperationException("The bus already has an overlapping active schedule.");
+            }
 
-        var availableSeats = await _db.ScheduleSeats
-            .Where(scheduleSeat =>
-                scheduleSeat.ScheduleId == schedule.Id &&
-                scheduleSeat.Status == ScheduleSeatStatus.Available)
-            .ToListAsync();
+            var datetimeNow = DateTimeOffset.UtcNow;
 
-        foreach (var scheduleSeat in availableSeats)
-        {
-            scheduleSeat.Price = request.BaseSeatPrice;
-            scheduleSeat.UpdatedAt = datetimeNow;
-        }
+            schedule.OriginStopId = request.OriginStopId;
+            schedule.DestinationStopId = request.DestinationStopId;
+            schedule.DepartureTime = departureTime;
+            schedule.ArrivalTime = arrivalTime;
+            schedule.BaseSeatPrice = request.BaseSeatPrice;
+            schedule.UpdatedAt = datetimeNow;
 
-        try
-        {
-            await _db.SaveChangesAsync();
-        }
-        catch (DbUpdateException exception)
-            when (IsScheduleOverlapViolation(exception))
-        {
-            throw new InvalidOperationException("The bus already has an overlapping active schedule.");
-        }
+            var availableSeats = await _db.ScheduleSeats
+                .Where(scheduleSeat =>
+                    scheduleSeat.ScheduleId == schedule.Id &&
+                    scheduleSeat.Status == ScheduleSeatStatus.Available)
+                .ToListAsync();
 
-        return MapToResponse(schedule);
+            foreach (var scheduleSeat in availableSeats)
+            {
+                scheduleSeat.Price = request.BaseSeatPrice;
+                scheduleSeat.UpdatedAt = datetimeNow;
+            }
+
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (DbUpdateException exception)
+                when (IsScheduleOverlapViolation(exception))
+            {
+                throw new InvalidOperationException("The bus already has an overlapping active schedule.");
+            }
+
+            await transaction.CommitAsync();
+
+            return MapToResponse(schedule);
+        });
     }
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var schedule = await _db.Schedules
-            .FirstOrDefaultAsync(schedule => schedule.Id == id);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (schedule is null || schedule.Status != ScheduleStatus.Scheduled)
+        return await strategy.ExecuteAsync(async () =>
         {
-            return false;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        var bus = await _db.Buses
-            .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
+            var schedule = await _db.Schedules
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Schedules"
+                    WHERE "Id" = {id}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (bus is null)
-        {
-            throw new KeyNotFoundException("Bus not found.");
-        }
+            if (schedule is null || schedule.Status != ScheduleStatus.Scheduled)
+            {
+                return false;
+            }
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FirstOrDefaultAsync(bus => bus.Id == schedule.BusId);
 
-        var hasBookedSeats = await _db.ScheduleSeats
-            .AnyAsync(scheduleSeat =>
-                scheduleSeat.ScheduleId == id &&
-                scheduleSeat.Status == ScheduleSeatStatus.Booked);
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
-        if (hasBookedSeats)
-        {
-            throw new InvalidOperationException("A schedule with booked seats cannot be cancelled.");
-        }
+            EnsureCanManageBus(bus);
 
-        schedule.Status = ScheduleStatus.Cancelled;
-        schedule.UpdatedAt = DateTimeOffset.UtcNow;
+            var hasBookedSeats = await _db.ScheduleSeats
+                .AnyAsync(scheduleSeat =>
+                    scheduleSeat.ScheduleId == id &&
+                    scheduleSeat.Status == ScheduleSeatStatus.Booked);
 
-        await _db.SaveChangesAsync();
+            if (hasBookedSeats)
+            {
+                throw new InvalidOperationException("A schedule with booked seats cannot be cancelled.");
+            }
 
-        return true;
+            schedule.Status = ScheduleStatus.Cancelled;
+            schedule.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        });
     }
 
     public async Task<List<ScheduleSearchResponseDto>> SearchAsync(ScheduleSearchRequestDto request)
