@@ -21,85 +21,102 @@ public class SeatService : ISeatService
 
     public async Task<SeatResponseDto> CreateAsync(Guid busId, CreateSeatRequestDto request)
     {
-        var bus = await _db.Buses.FirstOrDefaultAsync(bus => bus.Id == busId);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (bus is null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            throw new KeyNotFoundException("Bus not found.");
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {busId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (!bus.IsActive)
-        {
-            throw new InvalidOperationException("Cannot add a seat to an inactive bus.");
-        }
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
-        BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
+            EnsureCanManageBus(bus);
 
-        if (request.RowNumber < 1 || request.RowNumber > bus.TotalRows)
-        {
-            throw new InvalidOperationException($"Row number must be between 1 and {bus.TotalRows}.");
-        }
+            if (!bus.IsActive)
+            {
+                throw new InvalidOperationException("Cannot add a seat to an inactive bus.");
+            }
 
-        if (request.ColumnNumber < 1 || request.ColumnNumber > bus.TotalColumns)
-        {
-            throw new InvalidOperationException($"Column number must be between 1 and {bus.TotalColumns}.");
-        }
+            BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
 
-        var activeSeatCount = await _db.Seats
-            .CountAsync(seat =>
-                seat.BusId == busId &&
-                seat.IsActive);
+            if (request.RowNumber < 1 || request.RowNumber > bus.TotalRows)
+            {
+                throw new InvalidOperationException($"Row number must be between 1 and {bus.TotalRows}.");
+            }
 
-        if (activeSeatCount >= bus.TotalSeats)
-        {
-            throw new InvalidOperationException("The bus has reached its maximum seat capacity.");
-        }
+            if (request.ColumnNumber < 1 || request.ColumnNumber > bus.TotalColumns)
+            {
+                throw new InvalidOperationException($"Column number must be between 1 and {bus.TotalColumns}.");
+            }
 
-        var seatNumber = request.SeatNumber.Trim();
+            var activeSeatCount = await _db.Seats
+                .CountAsync(seat =>
+                    seat.BusId == busId &&
+                    seat.IsActive);
 
-        var seatExists = await _db.Seats
-            .AnyAsync(seat =>
-                seat.BusId == busId &&
-                seat.SeatNumber == seatNumber);
+            if (activeSeatCount >= bus.TotalSeats)
+            {
+                throw new InvalidOperationException("The bus has reached its maximum seat capacity.");
+            }
 
-        if (seatExists)
-        {
-            throw new InvalidOperationException("A seat with this number already exists on the bus.");
-        }
+            var seatNumber = request.SeatNumber.Trim();
 
-        var level = GetLevel(request.SeatType);
+            var seatExists = await _db.Seats
+                .AnyAsync(seat =>
+                    seat.BusId == busId &&
+                    seat.SeatNumber == seatNumber);
 
-        var coordinateExists = await _db.Seats
-            .AnyAsync(seat =>
-                seat.BusId == busId &&
-                seat.Level == level &&
-                seat.RowNumber == request.RowNumber &&
-                seat.ColumnNumber == request.ColumnNumber);
+            if (seatExists)
+            {
+                throw new InvalidOperationException("A seat with this number already exists on the bus.");
+            }
 
-        if (coordinateExists)
-        {
-            throw new InvalidOperationException("A seat already exists at this position on the bus.");
-        }
+            var level = GetLevel(request.SeatType);
 
-        var seat = new Seat
-        {
-            Id = Guid.NewGuid(),
-            BusId = busId,
-            SeatNumber = seatNumber,
-            SeatType = request.SeatType,
-            Level = level,
-            RowNumber = request.RowNumber,
-            ColumnNumber = request.ColumnNumber,
-            IsActive = true
-        };
+            var coordinateExists = await _db.Seats
+                .AnyAsync(seat =>
+                    seat.BusId == busId &&
+                    seat.Level == level &&
+                    seat.RowNumber == request.RowNumber &&
+                    seat.ColumnNumber == request.ColumnNumber);
 
-        _db.Seats.Add(seat);
+            if (coordinateExists)
+            {
+                throw new InvalidOperationException("A seat already exists at this position on the bus.");
+            }
 
-        await _db.SaveChangesAsync();
+            var seat = new Seat
+            {
+                Id = Guid.NewGuid(),
+                BusId = busId,
+                SeatNumber = seatNumber,
+                SeatType = request.SeatType,
+                Level = level,
+                RowNumber = request.RowNumber,
+                ColumnNumber = request.ColumnNumber,
+                IsActive = true
+            };
 
-        return MapToResponse(seat);
+            _db.Seats.Add(seat);
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return MapToResponse(seat);
+        });
     }
 
     public async Task<List<SeatResponseDto>> GetByBusIdAsync(Guid busId)
@@ -153,6 +170,7 @@ public class SeatService : ISeatService
             .FirstOrDefaultAsync();
     }
 
+
     public async Task<SeatResponseDto?> UpdateAsync(Guid seatId, UpdateSeatRequestDto request)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -161,6 +179,30 @@ public class SeatService : ISeatService
         {
             await using var transaction =
                 await _db.Database.BeginTransactionAsync();
+
+            var busId = await _db.Seats
+                .Where(seat => seat.Id == seatId)
+                .Select(seat => (Guid?)seat.BusId)
+                .SingleOrDefaultAsync();
+
+            if (busId is null)
+            {
+                return null;
+            }
+
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {busId.Value}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
+
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
             var seat = await _db.Seats
                 .FromSqlInterpolated($"""
@@ -176,18 +218,9 @@ public class SeatService : ISeatService
                 return null;
             }
 
-            var bus = await _db.Buses
-                .FromSqlInterpolated($"""
-                    SELECT *
-                    FROM "Buses"
-                    WHERE "Id" = {seat.BusId}
-                    FOR UPDATE
-                    """)
-                .SingleOrDefaultAsync();
-
-            if (bus is null)
+            if (seat.BusId != bus.Id)
             {
-                throw new KeyNotFoundException("Bus not found.");
+                throw new InvalidOperationException("The seat's bus assignment changed during the update. Please retry.");
             }
 
             EnsureCanManageBus(bus);
@@ -261,7 +294,7 @@ public class SeatService : ISeatService
             await transaction.CommitAsync();
 
             return MapToResponse(seat);
-        });        
+        });
     }
 
     public async Task<bool> DeleteAsync(Guid seatId)
@@ -272,6 +305,30 @@ public class SeatService : ISeatService
         {
             await using var transaction =
                 await _db.Database.BeginTransactionAsync();
+
+            var busId = await _db.Seats
+                .Where(seat => seat.Id == seatId)
+                .Select(seat => (Guid?)seat.BusId)
+                .SingleOrDefaultAsync();
+
+            if (busId is null)
+            {
+                return false;
+            }
+
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {busId.Value}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
+
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
             var seat = await _db.Seats
                 .FromSqlInterpolated($"""
@@ -287,18 +344,9 @@ public class SeatService : ISeatService
                 return false;
             }
 
-            var bus = await _db.Buses
-                .FromSqlInterpolated($"""
-                    SELECT *
-                    FROM "Buses"
-                    WHERE "Id" = {seat.BusId}
-                    FOR UPDATE
-                    """)
-                .SingleOrDefaultAsync();
-
-            if (bus is null)
+            if (seat.BusId != bus.Id)
             {
-                throw new KeyNotFoundException("Bus not found.");
+                throw new InvalidOperationException("The seat's bus assignment changed during deactivation. Please retry.");
             }
 
             EnsureCanManageBus(bus);
