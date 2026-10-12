@@ -84,73 +84,108 @@ public class StopService : IStopService
 
     public async Task<StopResponseDto?> UpdateAsync(Guid id, UpdateStopRequestDto request)
     {
-        var stop = await _db.Stops.FirstOrDefaultAsync(stop => stop.Id == id);
 
-        if (stop is null)
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
         {
-            return null;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        var name = request.Name.Trim();
-        var city = request.City.Trim();
+            var stop = await _db.Stops
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Stops"
+                    WHERE "Id" = {id}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        var duplicateExists = await _db.Stops
-            .AnyAsync(other =>
-                other.Id != id &&
-                other.Name == name &&
-                other.City == city);
+            if (stop is null)
+            {
+                return null;
+            }
 
-        if (duplicateExists)
-        {
-            throw new InvalidOperationException("A stop with this name already exists in this city.");
-        }
+            var name = request.Name.Trim();
+            var city = request.City.Trim();
 
-        var hasSchedules = await _db.Schedules
-            .AnyAsync(schedule =>
-                schedule.OriginStopId == id ||
-                schedule.DestinationStopId == id);
+            var duplicateExists = await _db.Stops
+                .AnyAsync(other =>
+                    other.Id != id &&
+                    other.Name == name &&
+                    other.City == city);
 
-        if (hasSchedules)
-        {
-            throw new InvalidOperationException(
-                "A stop that is assigned to a schedule cannot be modified.");
-        }
+            if (duplicateExists)
+            {
+                throw new InvalidOperationException("A stop with this name already exists in this city.");
+            }
 
-        stop.Name = name;
-        stop.City = city;
-        stop.UpdatedAt = DateTimeOffset.UtcNow;
+            var hasSchedules = await _db.Schedules
+                .AnyAsync(schedule =>
+                    schedule.OriginStopId == id ||
+                    schedule.DestinationStopId == id);
 
-        await _db.SaveChangesAsync();
+            if (hasSchedules)
+            {
+                throw new InvalidOperationException("A stop that is assigned to a schedule cannot be modified.");
+            }
 
-        return MapToResponse(stop);
+            stop.Name = name;
+            stop.City = city;
+            stop.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return MapToResponse(stop);
+        });
     }
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var stop = await _db.Stops.FirstOrDefaultAsync(stop => stop.Id == id);
 
-        if (stop is null)
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
         {
-            return false;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        var hasSchedules = await _db.Schedules
-            .AnyAsync(schedule =>
-                schedule.OriginStopId == id ||
-                schedule.DestinationStopId == id);
+            var stop = await _db.Stops
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Stops"
+                    WHERE "Id" = {id}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (hasSchedules)
-        {
-            throw new InvalidOperationException(
-                "A stop that is assigned to a schedule cannot be deactivated.");
-        }
+            if (stop is null)
+            {
+                return false;
+            }
 
-        stop.IsActive = false;
-        stop.UpdatedAt = DateTimeOffset.UtcNow;
+            var hasSchedules = await _db.Schedules
+               .AnyAsync(schedule =>
+                   schedule.OriginStopId == id ||
+                   schedule.DestinationStopId == id);
 
-        await _db.SaveChangesAsync();
+            if (hasSchedules)
+            {
+                throw new InvalidOperationException(
+                    "A stop that is assigned to a schedule cannot be deactivated.");
+            }
 
-        return true;
+            stop.IsActive = false;
+            stop.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        });
     }
 
     private static StopResponseDto MapToResponse(Stop stop)
