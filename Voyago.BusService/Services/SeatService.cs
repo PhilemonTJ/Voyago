@@ -155,126 +155,174 @@ public class SeatService : ISeatService
 
     public async Task<SeatResponseDto?> UpdateAsync(Guid seatId, UpdateSeatRequestDto request)
     {
-        var seat = await _db.Seats.FirstOrDefaultAsync(seat => seat.Id == seatId);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (seat is null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            return null;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        var bus = await _db.Buses.FirstOrDefaultAsync(bus => bus.Id == seat.BusId);
+            var seat = await _db.Seats
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Seats"
+                    WHERE "Id" = {seatId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (bus is null)
-        {
-            throw new KeyNotFoundException("Bus not found.");
-        }
+            if (seat is null)
+            {
+                return null;
+            }
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {seat.BusId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (!bus.IsActive)
-        {
-            throw new InvalidOperationException("Cannot update a seat on an inactive bus.");
-        }
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
-        if (!seat.IsActive)
-        {
-            throw new InvalidOperationException("Cannot update an inactive seat.");
-        }
+            EnsureCanManageBus(bus);
 
-        BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
+            if (!bus.IsActive)
+            {
+                throw new InvalidOperationException("Cannot update a seat on an inactive bus.");
+            }
 
-        if (request.RowNumber < 1 || request.RowNumber > bus.TotalRows)
-        {
-            throw new InvalidOperationException($"Row number must be between 1 and {bus.TotalRows}.");
-        }
+            if (!seat.IsActive)
+            {
+                throw new InvalidOperationException("Cannot update an inactive seat.");
+            }
 
-        if (request.ColumnNumber < 1 ||request.ColumnNumber > bus.TotalColumns)
-        {
-            throw new InvalidOperationException($"Column number must be between 1 and {bus.TotalColumns}.");
-        }
+            BusSeatTypeRules.Validate(bus.BusType, request.SeatType);
 
-        var seatNumber = request.SeatNumber.Trim();
+            if (request.RowNumber < 1 || request.RowNumber > bus.TotalRows)
+            {
+                throw new InvalidOperationException($"Row number must be between 1 and {bus.TotalRows}.");
+            }
 
-        var duplicateSeat = await _db.Seats
-            .AnyAsync(other =>
-                other.Id != seatId &&
-                other.BusId == seat.BusId &&
-                other.SeatNumber == seatNumber);
+            if (request.ColumnNumber < 1 || request.ColumnNumber > bus.TotalColumns)
+            {
+                throw new InvalidOperationException($"Column number must be between 1 and {bus.TotalColumns}.");
+            }
 
-        if (duplicateSeat)
-        {
-            throw new InvalidOperationException("A seat with this number already exists on the bus.");
-        }
+            var seatNumber = request.SeatNumber.Trim();
 
-        var hasSchedules = await _db.ScheduleSeats.AnyAsync(scheduleSeat => scheduleSeat.SeatId == seatId);
+            var duplicateSeat = await _db.Seats
+                .AnyAsync(other =>
+                    other.Id != seatId &&
+                    other.BusId == seat.BusId &&
+                    other.SeatNumber == seatNumber);
 
-        if (hasSchedules)
-        {
-            throw new InvalidOperationException(
-                "A seat that is assigned to a schedule cannot be modified.");
-        }
+            if (duplicateSeat)
+            {
+                throw new InvalidOperationException("A seat with this number already exists on the bus.");
+            }
 
-        var level = GetLevel(request.SeatType);
+            var hasSchedules = await _db.ScheduleSeats.AnyAsync(scheduleSeat => scheduleSeat.SeatId == seatId);
 
-        var coordinateExists = await _db.Seats
-            .AnyAsync(other =>
-                other.Id != seatId &&
-                other.BusId == seat.BusId &&
-                other.Level == level &&
-                other.RowNumber == request.RowNumber &&
-                other.ColumnNumber == request.ColumnNumber);
+            if (hasSchedules)
+            {
+                throw new InvalidOperationException(
+                    "A seat that is assigned to a schedule cannot be modified.");
+            }
 
-        if (coordinateExists)
-        {
-            throw new InvalidOperationException("A seat already exists at this position on the bus.");
-        }
+            var level = GetLevel(request.SeatType);
 
-        seat.SeatNumber = seatNumber;
-        seat.SeatType = request.SeatType;
-        seat.Level = level;
-        seat.RowNumber = request.RowNumber;
-        seat.ColumnNumber = request.ColumnNumber;
+            var coordinateExists = await _db.Seats
+                .AnyAsync(other =>
+                    other.Id != seatId &&
+                    other.BusId == seat.BusId &&
+                    other.Level == level &&
+                    other.RowNumber == request.RowNumber &&
+                    other.ColumnNumber == request.ColumnNumber);
 
-        await _db.SaveChangesAsync();
+            if (coordinateExists)
+            {
+                throw new InvalidOperationException("A seat already exists at this position on the bus.");
+            }
 
-        return MapToResponse(seat);
+            seat.SeatNumber = seatNumber;
+            seat.SeatType = request.SeatType;
+            seat.Level = level;
+            seat.RowNumber = request.RowNumber;
+            seat.ColumnNumber = request.ColumnNumber;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return MapToResponse(seat);
+        });        
     }
 
     public async Task<bool> DeleteAsync(Guid seatId)
     {
-        var seat = await _db.Seats.FirstOrDefaultAsync(seat => seat.Id == seatId);
+        var strategy = _db.Database.CreateExecutionStrategy();
 
-        if (seat is null)
+        return await strategy.ExecuteAsync(async () =>
         {
-            return false;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        var bus = await _db.Buses.FirstOrDefaultAsync(bus => bus.Id == seat.BusId);
+            var seat = await _db.Seats
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Seats"
+                    WHERE "Id" = {seatId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (bus is null)
-        {
-            throw new KeyNotFoundException("Bus not found.");
-        }
+            if (seat is null)
+            {
+                return false;
+            }
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {seat.BusId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (!seat.IsActive)
-        {
-            return false;
-        }
+            if (bus is null)
+            {
+                throw new KeyNotFoundException("Bus not found.");
+            }
 
-        var hasSchedules = await _db.ScheduleSeats.AnyAsync(scheduleSeat => scheduleSeat.SeatId == seatId);
+            EnsureCanManageBus(bus);
 
-        if (hasSchedules)
-        {
-            throw new InvalidOperationException("A seat that is assigned to a schedule cannot be deactivated.");
-        }
+            if (!seat.IsActive)
+            {
+                return false;
+            }
 
-        seat.IsActive = false;
+            var hasSchedules = await _db.ScheduleSeats.AnyAsync(scheduleSeat => scheduleSeat.SeatId == seatId);
 
-        await _db.SaveChangesAsync();
+            if (hasSchedules)
+            {
+                throw new InvalidOperationException("A seat that is assigned to a schedule cannot be deactivated.");
+            }
 
-        return true;
+            seat.IsActive = false;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        });
     }
 
     private void EnsureCanManageBus(Bus bus)
