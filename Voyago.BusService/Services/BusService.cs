@@ -142,159 +142,194 @@ public class BusService : IBusService
 
     public async Task<BusResponseDto?> UpdateAsync(Guid id, UpdateBusRequestDto request)
     {
-        var bus = await _db.Buses.FirstOrDefaultAsync(bus => bus.Id == id);
 
-        if (bus is null)
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
         {
-            return null;
-        }
+            await using var transaction = await _db.Database.BeginTransactionAsync();
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {id}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (!bus.IsActive)
-        {
-            throw new InvalidOperationException("Cannot update an inactive bus.");
-        }
-
-        if (request.BusType != bus.BusType)
-        {
-            var hasInvalidSeat = await _db.Seats
-                .AnyAsync(seat =>
-                    seat.BusId == id &&
-                    seat.IsActive &&
-                    !BusSeatTypeRules.IsAllowed(
-                        request.BusType,
-                        seat.SeatType));
-
-            if (hasInvalidSeat)
+            if (bus is null)
             {
-                throw new InvalidOperationException($"Cannot change bus type to '{request.BusType}' because the bus has existing seats that are not allowed for this bus type.");
-            }
-        }
-
-        if (request.TotalSeats < bus.TotalSeats)
-        {
-            var activeSeatCount = await _db.Seats
-                .CountAsync(seat =>
-                    seat.BusId == id &&
-                    seat.IsActive);
-
-            if (request.TotalSeats < activeSeatCount)
-            {
-                throw new InvalidOperationException($"Cannot reduce total seats below the current active seat count of {activeSeatCount}.");
-            }
-        }
-
-        if (request.TotalRows < bus.TotalRows || request.TotalColumns < bus.TotalColumns)
-        {
-            var maxRow = await _db.Seats
-                .Where(seat =>
-                    seat.BusId == id &&
-                    seat.IsActive)
-                .Select(seat => (int?)seat.RowNumber)
-                .MaxAsync() ?? 0;
-
-            var maxColumn = await _db.Seats
-                .Where(seat => seat.BusId == id && seat.IsActive)
-                .Select(seat => (int?)seat.ColumnNumber)
-                .MaxAsync() ?? 0;
-
-            if (request.TotalRows < maxRow)
-            {
-                throw new InvalidOperationException($"Cannot reduce total rows below {maxRow} because an active seat exists at row {maxRow}.");
+                return null;
             }
 
-            if (request.TotalColumns < maxColumn)
+            EnsureCanManageBus(bus);
+
+            if (!bus.IsActive)
             {
-                throw new InvalidOperationException($"Cannot reduce total columns below {maxColumn} because an active seat exists at column {maxColumn}.");
+                throw new InvalidOperationException("Cannot update an inactive bus.");
             }
-        }
 
-        var registrationExists =
-            await _db.Buses.AnyAsync(
-                other =>
-                    other.Id != id &&
-                    other.RegistrationNumber == request.RegistrationNumber.Trim());
+            if (request.BusType != bus.BusType)
+            {
+                var hasInvalidSeat = await _db.Seats
+                    .AnyAsync(seat =>
+                        seat.BusId == id &&
+                        seat.IsActive &&
+                        !BusSeatTypeRules.IsAllowed(
+                            request.BusType,
+                            seat.SeatType));
 
-        if (registrationExists)
-        {
-            throw new InvalidOperationException("A bus with this registration number already exists.");
-        }
+                if (hasInvalidSeat)
+                {
+                    throw new InvalidOperationException($"Cannot change bus type to '{request.BusType}' because the bus has existing seats that are not allowed for this bus type.");
+                }
+            }
 
-        var busNumberExists =
-            await _db.Buses.AnyAsync(
-                other =>
-                    other.Id != id &&
-                    other.OperatorId == bus.OperatorId &&
-                    other.BusNumber == request.BusNumber.Trim());
+            if (request.TotalSeats < bus.TotalSeats)
+            {
+                var activeSeatCount = await _db.Seats
+                    .CountAsync(seat =>
+                        seat.BusId == id &&
+                        seat.IsActive);
 
-        if (busNumberExists)
-        {
-            throw new InvalidOperationException("This bus number already exists for the operator.");
-        }
+                if (request.TotalSeats < activeSeatCount)
+                {
+                    throw new InvalidOperationException($"Cannot reduce total seats below the current active seat count of {activeSeatCount}.");
+                }
+            }
 
-        var hasSchedules = await _db.Schedules
-            .AnyAsync(schedule => schedule.BusId == id);
+            if (request.TotalRows < bus.TotalRows || request.TotalColumns < bus.TotalColumns)
+            {
+                var maxRow = await _db.Seats
+                    .Where(seat =>
+                        seat.BusId == id &&
+                        seat.IsActive)
+                    .Select(seat => (int?)seat.RowNumber)
+                    .MaxAsync() ?? 0;
 
-        var changesStructure =
-            bus.RegistrationNumber != request.RegistrationNumber.Trim() ||
-            bus.BusNumber != request.BusNumber.Trim() ||
-            bus.BusType != request.BusType ||
-            bus.TotalSeats != request.TotalSeats ||
-            bus.TotalRows != request.TotalRows ||
-            bus.TotalColumns != request.TotalColumns;
+                var maxColumn = await _db.Seats
+                    .Where(seat => seat.BusId == id && seat.IsActive)
+                    .Select(seat => (int?)seat.ColumnNumber)
+                    .MaxAsync() ?? 0;
 
-        if (hasSchedules && changesStructure)
-        {
-            throw new InvalidOperationException("A bus with assigned schedules cannot have its structural configuration modified.");
-        }
+                if (request.TotalRows < maxRow)
+                {
+                    throw new InvalidOperationException($"Cannot reduce total rows below {maxRow} because an active seat exists at row {maxRow}.");
+                }
 
-        bus.RegistrationNumber = request.RegistrationNumber.Trim();
-        bus.BusNumber = request.BusNumber.Trim();
-        bus.BusName = request.BusName?.Trim();
-        bus.BusType = request.BusType;
-        bus.TotalSeats = request.TotalSeats;
-        bus.TotalRows = request.TotalRows;
-        bus.TotalColumns = request.TotalColumns;
-        bus.ImageUrl = request.ImageUrl?.Trim();
-        bus.UpdatedAt = DateTimeOffset.UtcNow;
+                if (request.TotalColumns < maxColumn)
+                {
+                    throw new InvalidOperationException($"Cannot reduce total columns below {maxColumn} because an active seat exists at column {maxColumn}.");
+                }
+            }
 
-        await _db.SaveChangesAsync();
+            var registrationExists =
+                await _db.Buses.AnyAsync(
+                    other =>
+                        other.Id != id &&
+                        other.RegistrationNumber == request.RegistrationNumber.Trim());
 
-        return MapToResponse(bus);
+            if (registrationExists)
+            {
+                throw new InvalidOperationException("A bus with this registration number already exists.");
+            }
+
+            var busNumberExists =
+                await _db.Buses.AnyAsync(
+                    other =>
+                        other.Id != id &&
+                        other.OperatorId == bus.OperatorId &&
+                        other.BusNumber == request.BusNumber.Trim());
+
+            if (busNumberExists)
+            {
+                throw new InvalidOperationException("This bus number already exists for the operator.");
+            }
+
+            var hasSchedules = await _db.Schedules
+                .AnyAsync(schedule => schedule.BusId == id);
+
+            var changesStructure =
+                bus.RegistrationNumber != request.RegistrationNumber.Trim() ||
+                bus.BusNumber != request.BusNumber.Trim() ||
+                bus.BusType != request.BusType ||
+                bus.TotalSeats != request.TotalSeats ||
+                bus.TotalRows != request.TotalRows ||
+                bus.TotalColumns != request.TotalColumns;
+
+            if (hasSchedules && changesStructure)
+            {
+                throw new InvalidOperationException("A bus with assigned schedules cannot have its structural configuration modified.");
+            }
+
+            bus.RegistrationNumber = request.RegistrationNumber.Trim();
+            bus.BusNumber = request.BusNumber.Trim();
+            bus.BusName = request.BusName?.Trim();
+            bus.BusType = request.BusType;
+            bus.TotalSeats = request.TotalSeats;
+            bus.TotalRows = request.TotalRows;
+            bus.TotalColumns = request.TotalColumns;
+            bus.ImageUrl = request.ImageUrl?.Trim();
+            bus.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return MapToResponse(bus);
+        });        
     }
 
     public async Task<bool> DeleteAsync(Guid id)
     {
-        var bus = await _db.Buses
-            .FirstOrDefaultAsync(bus => bus.Id == id);
 
-        if (bus is null)
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
         {
-            return false;
-        }
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
-        EnsureCanManageBus(bus);
+            var bus = await _db.Buses
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM "Buses"
+                    WHERE "Id" = {id}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
 
-        if (!bus.IsActive)
-        {
-            return false;
-        }
+            if (bus is null)
+            {
+                return false;
+            }
 
-        var hasSchedules = await _db.Schedules
-            .AnyAsync(schedule => schedule.BusId == id);
+            EnsureCanManageBus(bus);
 
-        if (hasSchedules)
-        {
-            throw new InvalidOperationException("A bus that is assigned to a schedule cannot be deactivated.");
-        }
+            if (!bus.IsActive)
+            {
+                return false;
+            }
 
-        bus.IsActive = false;
-        bus.UpdatedAt = DateTimeOffset.UtcNow;
+            var hasSchedules = await _db.Schedules
+                .AnyAsync(schedule => schedule.BusId == id);
 
-        await _db.SaveChangesAsync();
+            if (hasSchedules)
+            {
+                throw new InvalidOperationException("A bus that is assigned to a schedule cannot be deactivated.");
+            }
 
-        return true;
+            bus.IsActive = false;
+            bus.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return true;
+        });
+
     }
 
     private void EnsureCanManageBus(Bus bus)
