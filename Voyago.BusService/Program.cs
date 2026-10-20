@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Voyago.BusService.Exceptions;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Text.Json.Serialization;
@@ -57,6 +58,7 @@ builder.AddServiceDefaults();
 builder.AddNpgsqlDbContext<BusDbContext>(connectionName: "busdb");
 
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 builder.Services.AddScoped<IBusService, BusService>();
 builder.Services.AddScoped<ISeatService, SeatService>();

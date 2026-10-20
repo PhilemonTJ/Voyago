@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Voyago.BookingService.Clients.BusService;
 using Voyago.BookingService.Data;
@@ -154,7 +154,15 @@ public class BookingService : IBookingService
 
     public async Task CancelAsync(Guid bookingId)
     {
+        await using var transaction = await _db.Database.BeginTransactionAsync();
+
         var booking = await _db.Bookings
+            .FromSqlInterpolated($"""
+                SELECT *
+                FROM "Bookings"
+                WHERE "Id" = {bookingId}
+                FOR UPDATE
+                """)
             .Include(booking => booking.BookingSeats)
             .FirstOrDefaultAsync(
                 booking => booking.Id == bookingId);
@@ -191,6 +199,7 @@ public class BookingService : IBookingService
         booking.UpdatedAt = now;
 
         await _db.SaveChangesAsync();
+        await transaction.CommitAsync();
     }
 
     public async Task<InvoiceResponseDto?> GetInvoiceAsync(Guid bookingId)

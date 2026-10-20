@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql;
 
 namespace Voyago.BookingService.Exceptions;
 
@@ -32,6 +34,20 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
                  "Forbidden"),
 
             BusinessConflictException =>
+                (StatusCodes.Status409Conflict,
+                 "Booking conflict"),
+
+            DbUpdateConcurrencyException =>
+                (StatusCodes.Status409Conflict,
+                 "Booking changed"),
+
+            DbUpdateException
+            {
+                InnerException: PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation
+                }
+            } =>
                 (StatusCodes.Status409Conflict,
                  "Booking conflict"),
 
