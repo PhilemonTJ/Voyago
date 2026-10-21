@@ -10,7 +10,7 @@ public interface IBusService
 
     Task<BusResponseDto?> GetByIdAsync(Guid id);
 
-    Task<BusResponseDto?> UpdateAsync(Guid id, UpdateBusRequestDto request);
+    Task<BusResponseDto?> UpdateAsync(Guid id, UpdateBusRequestDto request, uint expectedVersion);
 
-    Task<bool> DeleteAsync(Guid id);
+    Task<bool> DeleteAsync(Guid id, uint expectedVersion);
 }

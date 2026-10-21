@@ -10,7 +10,7 @@ public interface ISeatService
 
     Task<SeatResponseDto?> GetByIdAsync(Guid seatId);
 
-    Task<SeatResponseDto?> UpdateAsync(Guid seatId, UpdateSeatRequestDto request);
+    Task<SeatResponseDto?> UpdateAsync(Guid seatId, UpdateSeatRequestDto request, uint expectedVersion);
 
-    Task<bool> DeleteAsync(Guid seatId);
+    Task<bool> DeleteAsync(Guid seatId, uint expectedVersion);
 }

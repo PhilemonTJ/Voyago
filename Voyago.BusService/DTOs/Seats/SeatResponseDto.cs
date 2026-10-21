@@ -19,4 +19,6 @@ public class SeatResponseDto
     public int ColumnNumber { get; set; }
 
     public bool IsActive { get; set; }
+
+    public uint Version { get; set; }
 }

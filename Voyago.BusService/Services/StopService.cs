@@ -60,7 +60,8 @@ public class StopService : IStopService
                 City = stop.City,
                 IsActive = stop.IsActive,
                 CreatedAt = stop.CreatedAt,
-                UpdatedAt = stop.UpdatedAt
+                UpdatedAt = stop.UpdatedAt,
+                Version = EF.Property<uint>(stop, "xmin")
             })
             .ToListAsync();
     }
@@ -77,12 +78,16 @@ public class StopService : IStopService
                 City = stop.City,
                 IsActive = stop.IsActive,
                 CreatedAt = stop.CreatedAt,
-                UpdatedAt = stop.UpdatedAt
+                UpdatedAt = stop.UpdatedAt,
+                Version = EF.Property<uint>(stop, "xmin")
             })
             .FirstOrDefaultAsync();
     }
 
-    public async Task<StopResponseDto?> UpdateAsync(Guid id, UpdateStopRequestDto request)
+    public async Task<StopResponseDto?> UpdateAsync(
+        Guid id,
+        UpdateStopRequestDto request,
+        uint expectedVersion)
     {
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -94,7 +99,7 @@ public class StopService : IStopService
 
             var stop = await _db.Stops
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Stops"
                     WHERE "Id" = {id}
                     FOR UPDATE
@@ -105,6 +110,8 @@ public class StopService : IStopService
             {
                 return null;
             }
+
+            ConcurrencyToken.ApplyExpectedVersion(_db, stop, expectedVersion);
 
             var name = request.Name.Trim();
             var city = request.City.Trim();
@@ -142,7 +149,7 @@ public class StopService : IStopService
         });
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id, uint expectedVersion)
     {
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -154,7 +161,7 @@ public class StopService : IStopService
 
             var stop = await _db.Stops
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Stops"
                     WHERE "Id" = {id}
                     FOR UPDATE
@@ -165,6 +172,8 @@ public class StopService : IStopService
             {
                 return false;
             }
+
+            ConcurrencyToken.ApplyExpectedVersion(_db, stop, expectedVersion);
 
             var hasSchedules = await _db.Schedules
                .AnyAsync(schedule =>
@@ -188,7 +197,7 @@ public class StopService : IStopService
         });
     }
 
-    private static StopResponseDto MapToResponse(Stop stop)
+    private StopResponseDto MapToResponse(Stop stop)
     {
         return new StopResponseDto
         {
@@ -197,7 +206,8 @@ public class StopService : IStopService
             City = stop.City,
             IsActive = stop.IsActive,
             CreatedAt = stop.CreatedAt,
-            UpdatedAt = stop.UpdatedAt
+            UpdatedAt = stop.UpdatedAt,
+            Version = _db.Entry(stop).Property<uint>("xmin").CurrentValue
         };
     }
 }

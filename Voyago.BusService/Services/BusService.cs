@@ -116,7 +116,8 @@ public class BusService : IBusService
                 ImageUrl = bus.ImageUrl,
                 IsActive = bus.IsActive,
                 CreatedAt = bus.CreatedAt,
-                UpdatedAt = bus.UpdatedAt
+                UpdatedAt = bus.UpdatedAt,
+                Version = EF.Property<uint>(bus, "xmin")
             })
             .ToListAsync();
     }
@@ -124,7 +125,6 @@ public class BusService : IBusService
     public async Task<BusResponseDto?> GetByIdAsync(Guid id)
     {
         var bus = await _db.Buses
-            .AsNoTracking()
             .FirstOrDefaultAsync(bus => bus.Id == id);
 
         if (bus is null)
@@ -140,7 +140,10 @@ public class BusService : IBusService
         return MapToResponse(bus);
     }
 
-    public async Task<BusResponseDto?> UpdateAsync(Guid id, UpdateBusRequestDto request)
+    public async Task<BusResponseDto?> UpdateAsync(
+        Guid id,
+        UpdateBusRequestDto request,
+        uint expectedVersion)
     {
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -151,7 +154,7 @@ public class BusService : IBusService
 
             var bus = await _db.Buses
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Buses"
                     WHERE "Id" = {id}
                     FOR UPDATE
@@ -164,6 +167,7 @@ public class BusService : IBusService
             }
 
             EnsureCanManageBus(bus);
+            ConcurrencyToken.ApplyExpectedVersion(_db, bus, expectedVersion);
 
             if (!bus.IsActive)
             {
@@ -281,7 +285,7 @@ public class BusService : IBusService
         });        
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id, uint expectedVersion)
     {
 
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -293,7 +297,7 @@ public class BusService : IBusService
 
             var bus = await _db.Buses
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Buses"
                     WHERE "Id" = {id}
                     FOR UPDATE
@@ -306,6 +310,7 @@ public class BusService : IBusService
             }
 
             EnsureCanManageBus(bus);
+            ConcurrencyToken.ApplyExpectedVersion(_db, bus, expectedVersion);
 
             if (!bus.IsActive)
             {
@@ -345,7 +350,7 @@ public class BusService : IBusService
         }
     }
 
-    private static BusResponseDto MapToResponse(Bus bus)
+    private BusResponseDto MapToResponse(Bus bus)
     {
         return new BusResponseDto
         {
@@ -361,7 +366,8 @@ public class BusService : IBusService
             ImageUrl = bus.ImageUrl,
             IsActive = bus.IsActive,
             CreatedAt = bus.CreatedAt,
-            UpdatedAt = bus.UpdatedAt
+            UpdatedAt = bus.UpdatedAt,
+            Version = _db.Entry(bus).Property<uint>("xmin").CurrentValue
         };
     }
 }

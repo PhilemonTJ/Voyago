@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Schedules;
 using Voyago.BusService.Exceptions;
 using Voyago.BusService.Services.Interfaces;
@@ -24,6 +25,7 @@ public class SchedulesController : ControllerBase
         try
         {
             var schedule = await _scheduleService.CreateAsync(request);
+            ConcurrencyToken.SetEtag(Response, schedule.Version);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -82,16 +84,30 @@ public class SchedulesController : ControllerBase
             });
         }
 
+        ConcurrencyToken.SetEtag(Response, schedule.Version);
         return Ok(schedule);
     }
 
     [Authorize(Roles = "Operator, Admin")]
     [HttpPut("{id:guid}")]
-    public async Task<ActionResult<ScheduleResponseDto>> Update(Guid id, UpdateScheduleRequestDto request)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ScheduleResponseDto>> Update(
+        Guid id,
+        UpdateScheduleRequestDto request,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
         try
         {
-            var schedule = await _scheduleService.UpdateAsync(id, request);
+            var schedule = await _scheduleService.UpdateAsync(id, request, expectedVersion);
 
             if (schedule is null)
             {
@@ -103,6 +119,7 @@ public class SchedulesController : ControllerBase
                 });
             }
 
+            ConcurrencyToken.SetEtag(Response, schedule.Version);
             return Ok(schedule);
         }
         catch (KeyNotFoundException ex)
@@ -134,11 +151,23 @@ public class SchedulesController : ControllerBase
 
     [Authorize(Roles = "Operator, Admin")]
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(
+        Guid id,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
         try
         {
-            var deleted = await _scheduleService.DeleteAsync(id);
+            var deleted = await _scheduleService.DeleteAsync(id, expectedVersion);
 
             if (!deleted)
             {

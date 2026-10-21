@@ -27,4 +27,6 @@ public class ScheduleSearchResponseDto
     public DateTimeOffset DepartureTime { get; set; }
 
     public DateTimeOffset ArrivalTime { get; set; }
+
+    public uint Version { get; set; }
 }

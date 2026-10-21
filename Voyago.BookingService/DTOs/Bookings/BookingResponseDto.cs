@@ -20,5 +20,7 @@ public class BookingResponseDto
 
     public DateTimeOffset? CancelledAt { get; set; }
 
+    public uint Version { get; set; }
+
     public List<BookingSeatResponseDto> Seats { get; set; } = new();
 }

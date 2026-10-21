@@ -116,7 +116,6 @@ public class BookingService : IBookingService
     public async Task<BookingResponseDto?> GetByIdAsync(Guid bookingId)
     {
         var booking = await _db.Bookings
-            .AsNoTracking()
             .Include(booking => booking.BookingSeats)
             .FirstOrDefaultAsync(
                 booking => booking.Id == bookingId);
@@ -147,18 +146,19 @@ public class BookingService : IBookingService
                 Status = booking.Status.ToString(),
                 TotalAmount = booking.TotalAmount,
                 CreatedAt = booking.CreatedAt,
-                SeatCount = booking.BookingSeats.Count
+                SeatCount = booking.BookingSeats.Count,
+                Version = EF.Property<uint>(booking, "xmin")
             })
             .ToListAsync();
     }
 
-    public async Task CancelAsync(Guid bookingId)
+    public async Task CancelAsync(Guid bookingId, uint expectedVersion)
     {
         await using var transaction = await _db.Database.BeginTransactionAsync();
 
         var booking = await _db.Bookings
             .FromSqlInterpolated($"""
-                SELECT *
+                SELECT *, xmin
                 FROM "Bookings"
                 WHERE "Id" = {bookingId}
                 FOR UPDATE
@@ -173,6 +173,7 @@ public class BookingService : IBookingService
         }
 
         EnsureCanAccess(booking);
+        ConcurrencyToken.ApplyExpectedVersion(_db, booking, expectedVersion);
 
         if (booking.Status == BookingStatus.Cancelled)
         {
@@ -264,7 +265,7 @@ public class BookingService : IBookingService
             .ToUpperInvariant();
     }
 
-    private static BookingResponseDto MapToResponse(
+    private BookingResponseDto MapToResponse(
         Booking booking)
     {
         return new BookingResponseDto
@@ -278,6 +279,7 @@ public class BookingService : IBookingService
             CreatedAt = booking.CreatedAt,
             UpdatedAt = booking.UpdatedAt,
             CancelledAt = booking.CancelledAt,
+            Version = _db.Entry(booking).Property<uint>("xmin").CurrentValue,
             Seats = booking.BookingSeats
                 .Select(seat => new BookingSeatResponseDto
                 {

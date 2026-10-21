@@ -42,7 +42,7 @@ public class ScheduleService : IScheduleService
 
             var bus = await _db.Buses
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Buses"
                     WHERE "Id" = {request.BusId}
                     FOR UPDATE
@@ -63,7 +63,7 @@ public class ScheduleService : IScheduleService
 
             var seats = await _db.Seats
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Seats"
                     WHERE "BusId" = {request.BusId}
                       AND "IsActive" = TRUE
@@ -88,7 +88,7 @@ public class ScheduleService : IScheduleService
 
             var stops = await _db.Stops
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Stops"
                     WHERE "Id" = ANY({stopIds})
                     ORDER BY "Id"
@@ -193,7 +193,8 @@ public class ScheduleService : IScheduleService
                 BaseSeatPrice = schedule.BaseSeatPrice,
                 Status = schedule.Status,
                 CreatedAt = schedule.CreatedAt,
-                UpdatedAt = schedule.UpdatedAt
+                UpdatedAt = schedule.UpdatedAt,
+                Version = EF.Property<uint>(schedule, "xmin")
             })
             .ToListAsync();
     }
@@ -220,12 +221,16 @@ public class ScheduleService : IScheduleService
                 BaseSeatPrice = schedule.BaseSeatPrice,
                 Status = schedule.Status,
                 CreatedAt = schedule.CreatedAt,
-                UpdatedAt = schedule.UpdatedAt
+                UpdatedAt = schedule.UpdatedAt,
+                Version = EF.Property<uint>(schedule, "xmin")
             })
             .FirstOrDefaultAsync();
     }
 
-    public async Task<ScheduleResponseDto?> UpdateAsync(Guid id, UpdateScheduleRequestDto request)
+    public async Task<ScheduleResponseDto?> UpdateAsync(
+        Guid id,
+        UpdateScheduleRequestDto request,
+        uint expectedVersion)
     {
         var departureTime = request.DepartureTime.ToUniversalTime();
         var arrivalTime = request.ArrivalTime.ToUniversalTime();
@@ -248,7 +253,7 @@ public class ScheduleService : IScheduleService
 
             var schedule = await _db.Schedules
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Schedules"
                     WHERE "Id" = {id}
                     FOR UPDATE
@@ -284,6 +289,7 @@ public class ScheduleService : IScheduleService
             }
 
             EnsureCanManageBus(bus);
+            ConcurrencyToken.ApplyExpectedVersion(_db, schedule, expectedVersion);
 
             var originStop = await _db.Stops
                 .FirstOrDefaultAsync(stop =>
@@ -363,7 +369,7 @@ public class ScheduleService : IScheduleService
         });
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> DeleteAsync(Guid id, uint expectedVersion)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -374,14 +380,19 @@ public class ScheduleService : IScheduleService
 
             var schedule = await _db.Schedules
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Schedules"
                     WHERE "Id" = {id}
                     FOR UPDATE
                     """)
                 .SingleOrDefaultAsync();
 
-            if (schedule is null || schedule.Status != ScheduleStatus.Scheduled)
+            if (schedule is null)
+            {
+                return false;
+            }
+
+            if (schedule.Status != ScheduleStatus.Scheduled)
             {
                 return false;
             }
@@ -395,6 +406,7 @@ public class ScheduleService : IScheduleService
             }
 
             EnsureCanManageBus(bus);
+            ConcurrencyToken.ApplyExpectedVersion(_db, schedule, expectedVersion);
 
             var hasBookedSeats = await _db.ScheduleSeats
                 .AnyAsync(scheduleSeat =>
@@ -479,7 +491,8 @@ public class ScheduleService : IScheduleService
                 DestinationCity = schedule.DestinationStop.City,
 
                 DepartureTime = schedule.DepartureTime,
-                ArrivalTime = schedule.ArrivalTime
+                ArrivalTime = schedule.ArrivalTime,
+                Version = EF.Property<uint>(schedule, "xmin")
             })
             .ToListAsync();
     }
@@ -514,7 +527,7 @@ public class ScheduleService : IScheduleService
                postgresException.ConstraintName == "CK_Schedules_NoOverlappingActiveSchedules";
     }
 
-    private static ScheduleResponseDto MapToResponse(Schedule schedule)
+    private ScheduleResponseDto MapToResponse(Schedule schedule)
     {
         return new ScheduleResponseDto
         {
@@ -527,7 +540,8 @@ public class ScheduleService : IScheduleService
             BaseSeatPrice = schedule.BaseSeatPrice,
             Status = schedule.Status,
             CreatedAt = schedule.CreatedAt,
-            UpdatedAt = schedule.UpdatedAt
+            UpdatedAt = schedule.UpdatedAt,
+            Version = _db.Entry(schedule).Property<uint>("xmin").CurrentValue
         };
     }
 }

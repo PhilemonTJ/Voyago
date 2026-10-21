@@ -146,7 +146,7 @@ public class ScheduleSeatService : IScheduleSeatService
 
             var schedule = await _db.Schedules
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Schedules"
                     WHERE "Id" = {scheduleId}
                     FOR UPDATE
@@ -178,7 +178,7 @@ public class ScheduleSeatService : IScheduleSeatService
 
             var scheduleSeats = await _db.ScheduleSeats
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "ScheduleSeats"
                     WHERE "ScheduleId" = {scheduleId}
                       AND "Id" = ANY({seatIds.ToArray()})
@@ -256,7 +256,7 @@ public class ScheduleSeatService : IScheduleSeatService
 
             var schedule = await _db.Schedules
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Schedules"
                     WHERE "Id" = {scheduleId}
                     FOR UPDATE
@@ -288,7 +288,7 @@ public class ScheduleSeatService : IScheduleSeatService
 
             var seats = await _db.ScheduleSeats
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "ScheduleSeats"
                     WHERE "ScheduleId" = {scheduleId}
                       AND "Id" = ANY({seatIds.ToArray()})

@@ -30,7 +30,7 @@ public class SeatService : ISeatService
 
             var bus = await _db.Buses
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Buses"
                     WHERE "Id" = {busId}
                     FOR UPDATE
@@ -146,7 +146,8 @@ public class SeatService : ISeatService
                 Level = seat.Level,
                 RowNumber = seat.RowNumber,
                 ColumnNumber = seat.ColumnNumber,
-                IsActive = seat.IsActive
+                IsActive = seat.IsActive,
+                Version = EF.Property<uint>(seat, "xmin")
             })
             .ToListAsync();
     }
@@ -165,13 +166,17 @@ public class SeatService : ISeatService
                 Level = seat.Level,
                 RowNumber = seat.RowNumber,
                 ColumnNumber = seat.ColumnNumber,
-                IsActive = seat.IsActive
+                IsActive = seat.IsActive,
+                Version = EF.Property<uint>(seat, "xmin")
             })
             .FirstOrDefaultAsync();
     }
 
 
-    public async Task<SeatResponseDto?> UpdateAsync(Guid seatId, UpdateSeatRequestDto request)
+    public async Task<SeatResponseDto?> UpdateAsync(
+        Guid seatId,
+        UpdateSeatRequestDto request,
+        uint expectedVersion)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -192,7 +197,7 @@ public class SeatService : ISeatService
 
             var bus = await _db.Buses
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Buses"
                     WHERE "Id" = {busId.Value}
                     FOR UPDATE
@@ -206,7 +211,7 @@ public class SeatService : ISeatService
 
             var seat = await _db.Seats
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Seats"
                     WHERE "Id" = {seatId}
                     FOR UPDATE
@@ -224,6 +229,7 @@ public class SeatService : ISeatService
             }
 
             EnsureCanManageBus(bus);
+            ConcurrencyToken.ApplyExpectedVersion(_db, seat, expectedVersion);
 
             if (!bus.IsActive)
             {
@@ -297,7 +303,7 @@ public class SeatService : ISeatService
         });
     }
 
-    public async Task<bool> DeleteAsync(Guid seatId)
+    public async Task<bool> DeleteAsync(Guid seatId, uint expectedVersion)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
 
@@ -318,7 +324,7 @@ public class SeatService : ISeatService
 
             var bus = await _db.Buses
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Buses"
                     WHERE "Id" = {busId.Value}
                     FOR UPDATE
@@ -332,7 +338,7 @@ public class SeatService : ISeatService
 
             var seat = await _db.Seats
                 .FromSqlInterpolated($"""
-                    SELECT *
+                    SELECT *, xmin
                     FROM "Seats"
                     WHERE "Id" = {seatId}
                     FOR UPDATE
@@ -350,6 +356,7 @@ public class SeatService : ISeatService
             }
 
             EnsureCanManageBus(bus);
+            ConcurrencyToken.ApplyExpectedVersion(_db, seat, expectedVersion);
 
             if (!seat.IsActive)
             {
@@ -387,7 +394,7 @@ public class SeatService : ISeatService
         }
     }
 
-    private static SeatResponseDto MapToResponse(Seat seat)
+    private SeatResponseDto MapToResponse(Seat seat)
     {
         return new SeatResponseDto
         {
@@ -398,7 +405,8 @@ public class SeatService : ISeatService
             Level = seat.Level,
             RowNumber = seat.RowNumber,
             ColumnNumber = seat.ColumnNumber,
-            IsActive = seat.IsActive
+            IsActive = seat.IsActive,
+            Version = _db.Entry(seat).Property<uint>("xmin").CurrentValue
         };
     }
 

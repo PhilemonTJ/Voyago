@@ -15,4 +15,6 @@ public class BookingSummaryResponseDto
     public DateTimeOffset CreatedAt { get; set; }
 
     public int SeatCount { get; set; }
+
+    public uint Version { get; set; }
 }

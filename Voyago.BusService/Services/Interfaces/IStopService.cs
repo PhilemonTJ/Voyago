@@ -10,7 +10,7 @@ public interface IStopService
 
     Task<StopResponseDto?> GetByIdAsync(Guid id);
 
-    Task<StopResponseDto?> UpdateAsync(Guid id, UpdateStopRequestDto request);
+    Task<StopResponseDto?> UpdateAsync(Guid id, UpdateStopRequestDto request, uint expectedVersion);
 
-    Task<bool> DeleteAsync(Guid id);
+    Task<bool> DeleteAsync(Guid id, uint expectedVersion);
 }

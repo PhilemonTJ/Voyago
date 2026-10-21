@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Stops;
 using Voyago.BusService.Services.Interfaces;
 
@@ -23,6 +24,7 @@ public class StopsController : ControllerBase
         try
         {
             var stop = await _stopService.CreateAsync(request);
+            ConcurrencyToken.SetEtag(Response, stop.Version);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -65,16 +67,30 @@ public class StopsController : ControllerBase
             });
         }
 
+        ConcurrencyToken.SetEtag(Response, stop.Version);
         return Ok(stop);
     }
 
     [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}")]
-    public async Task<ActionResult<StopResponseDto>> Update(Guid id, UpdateStopRequestDto request)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<StopResponseDto>> Update(
+        Guid id,
+        UpdateStopRequestDto request,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
         try
         {
-            var stop = await _stopService.UpdateAsync(id, request);
+            var stop = await _stopService.UpdateAsync(id, request, expectedVersion);
 
             if (stop is null)
             {
@@ -86,6 +102,7 @@ public class StopsController : ControllerBase
                 });
             }
 
+            ConcurrencyToken.SetEtag(Response, stop.Version);
             return Ok(stop);
         }
         catch (InvalidOperationException ex)
@@ -101,9 +118,21 @@ public class StopsController : ControllerBase
 
     [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(
+        Guid id,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
-        var deleted = await _stopService.DeleteAsync(id);
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
+        var deleted = await _stopService.DeleteAsync(id, expectedVersion);
 
         if (!deleted)
         {

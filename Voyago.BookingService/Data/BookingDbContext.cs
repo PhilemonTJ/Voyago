@@ -22,6 +22,8 @@ public class BookingDbContext : DbContext
         modelBuilder.Entity<Booking>(entity =>
         {
             entity.HasKey(booking => booking.Id);
+            entity.Property<uint>("xmin")
+                .IsRowVersion();
 
             entity.Property(booking => booking.BookingReference)
                 .HasMaxLength(20)

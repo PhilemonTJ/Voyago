@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.Seats;
 using Voyago.BusService.Exceptions;
 using Voyago.BusService.Services.Interfaces;
@@ -24,6 +25,7 @@ public class SeatsController : ControllerBase
         try
         {
             var seat = await _seatService.CreateAsync(busId, request);
+            ConcurrencyToken.SetEtag(Response, seat.Version);
 
             return CreatedAtAction(
                 nameof(GetById),
@@ -89,22 +91,37 @@ public class SeatsController : ControllerBase
             return NotFound();
         }
 
+        ConcurrencyToken.SetEtag(Response, seat.Version);
         return Ok(seat);
     }
 
     [Authorize(Roles = "Operator, Admin")]
     [HttpPut("seats/{seatId:guid}")]
-    public async Task<ActionResult<SeatResponseDto>> Update(Guid seatId, UpdateSeatRequestDto request)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<SeatResponseDto>> Update(
+        Guid seatId,
+        UpdateSeatRequestDto request,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
         try
         {
-            var seat = await _seatService.UpdateAsync(seatId, request);
+            var seat = await _seatService.UpdateAsync(seatId, request, expectedVersion);
 
             if (seat is null)
             {
                 return NotFound();
             }
 
+            ConcurrencyToken.SetEtag(Response, seat.Version);
             return Ok(seat);
         }
         catch (KeyNotFoundException ex)
@@ -137,11 +154,23 @@ public class SeatsController : ControllerBase
 
     [Authorize(Roles = "Operator, Admin")]
     [HttpDelete("seats/{seatId:guid}")]
-    public async Task<IActionResult> Delete(Guid seatId)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(
+        Guid seatId,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
         try
         {
-            var deleted = await _seatService.DeleteAsync(seatId);
+            var deleted = await _seatService.DeleteAsync(seatId, expectedVersion);
 
             if (!deleted)
             {

@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Voyago.BookingService.Data;
 using Voyago.BookingService.DTOs.Bookings;
 using Voyago.BookingService.DTOs.Invoices;
 using Voyago.BookingService.Services.Interfaces;
@@ -24,6 +25,7 @@ public class BookingsController : ControllerBase
     {
 
         var booking = await _bookingService.CreateAsync(request);
+        ConcurrencyToken.SetEtag(Response, booking.Version);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -51,14 +53,27 @@ public class BookingsController : ControllerBase
             return NotFound();
         }
 
+        ConcurrencyToken.SetEtag(Response, booking.Version);
         return Ok(booking);
     }
 
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Roles = "Passenger")]
-    public async Task<IActionResult> Cancel(Guid id)
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Cancel(
+        Guid id,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
     {
-        await _bookingService.CancelAsync(id);
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
+        await _bookingService.CancelAsync(id, expectedVersion);
 
         return NoContent();
     }

@@ -20,6 +20,8 @@ public class BusDbContext : DbContext
         modelBuilder.Entity<Bus>(entity =>
         {
             entity.HasKey(bus => bus.Id);
+            entity.Property<uint>("xmin")
+                .IsRowVersion();
 
             entity.Property(bus => bus.RegistrationNumber)
                 .HasMaxLength(50)
@@ -73,6 +75,8 @@ public class BusDbContext : DbContext
         modelBuilder.Entity<Seat>(entity =>
         {
             entity.HasKey(seat => seat.Id);
+            entity.Property<uint>("xmin")
+                .IsRowVersion();
 
             entity.Property(seat => seat.SeatNumber)
                 .HasMaxLength(20)
@@ -123,6 +127,8 @@ public class BusDbContext : DbContext
         modelBuilder.Entity<Stop>(entity =>
         {
             entity.HasKey(stop => stop.Id);
+            entity.Property<uint>("xmin")
+                .IsRowVersion();
 
             entity.Property(stop => stop.Name)
                 .HasMaxLength(100)
@@ -152,6 +158,8 @@ public class BusDbContext : DbContext
         modelBuilder.Entity<Schedule>(entity =>
         {
             entity.HasKey(schedule => schedule.Id);
+            entity.Property<uint>("xmin")
+                .IsRowVersion();
 
             entity.Property(schedule => schedule.DepartureTime)
                 .IsRequired();
@@ -203,6 +211,8 @@ public class BusDbContext : DbContext
         modelBuilder.Entity<ScheduleSeat>(entity =>
         {
             entity.HasKey(scheduleSeat => scheduleSeat.Id);
+            entity.Property<uint>("xmin")
+                .IsRowVersion();
 
             entity.Property(scheduleSeat => scheduleSeat.Price)
                 .HasPrecision(10, 2)

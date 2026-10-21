@@ -13,4 +13,6 @@ public class StopResponseDto
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset? UpdatedAt { get; set; }
+
+    public uint Version { get; set; }
 }
