@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using Voyago.BookingService.Data;
+using Voyago.BookingService.Models;
 using Voyago.Shared.Contracts.Events;
 
 namespace Voyago.BookingService.Messaging;
@@ -52,18 +53,7 @@ public class OutboxWorker : BackgroundService
         {
             try
             {
-                var bookingCreatedEvent = JsonSerializer.Deserialize<BookingCreatedEvent>(message.Payload);
-
-                if (bookingCreatedEvent is null)
-                {
-                    _logger.LogError(
-                        "Could not deserialize outbox message {MessageId}.",
-                        message.Id);
-
-                    continue;
-                }
-
-                await publisher.PublishAsync(bookingCreatedEvent);
+                await PublishByEventTypeAsync(publisher, message);
 
                 message.ProcessedAt = DateTimeOffset.UtcNow;
 
@@ -82,5 +72,28 @@ public class OutboxWorker : BackgroundService
                     message.Id);
             }
         }
+    }
+
+    private static Task PublishByEventTypeAsync(
+        IEventPublisher publisher,
+        OutboxMessage message)
+    {
+        return message.EventType switch
+        {
+            nameof(BookingCreatedEvent) =>
+                publisher.PublishAsync(
+                    JsonSerializer.Deserialize<BookingCreatedEvent>(message.Payload)!),
+
+            nameof(BookingConfirmedEvent) =>
+                publisher.PublishAsync(
+                    JsonSerializer.Deserialize<BookingConfirmedEvent>(message.Payload)!),
+
+            nameof(BookingExpiredEvent) =>
+                publisher.PublishAsync(
+                    JsonSerializer.Deserialize<BookingExpiredEvent>(message.Payload)!),
+
+            _ => throw new InvalidOperationException(
+                $"Unsupported outbox event type '{message.EventType}'.")
+        };
     }
 }

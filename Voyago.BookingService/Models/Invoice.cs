@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace Voyago.BookingService.Models;
 
@@ -18,6 +18,14 @@ public class Invoice
 
     [Required]
     public DateTimeOffset IssuedAt { get; set; }
+
+    [Required]
+    public InvoiceStatus Status { get; set; }
+
+    public DateTimeOffset? PaidAt { get; set; }
+
+    [MaxLength(30)]
+    public string? PaymentMethod { get; set; }
 
     public Booking Booking { get; set; } = null!;
 }

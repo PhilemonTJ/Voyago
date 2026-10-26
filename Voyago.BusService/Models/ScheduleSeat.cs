@@ -24,6 +24,8 @@ public class ScheduleSeat
 
     public DateTimeOffset? UpdatedAt { get; set; }
 
+    public DateTimeOffset? HeldUntil { get; set; }
+
     public Schedule Schedule { get; set; } = null!;
 
     public Seat Seat { get; set; } = null!;

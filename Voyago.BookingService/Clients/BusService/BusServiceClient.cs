@@ -1,4 +1,4 @@
-﻿using Voyago.Shared.Contracts.Bus;
+using Voyago.Shared.Contracts.Bus;
 
 namespace Voyago.BookingService.Clients.BusService;
 
@@ -43,6 +43,19 @@ public class BusServiceClient : IBusServiceClient
         return await response.Content
             .ReadFromJsonAsync<List<ScheduleSeatInfo>>()
             ?? new List<ScheduleSeatInfo>();
+    }
+
+    public async Task ConfirmScheduleSeatsAsync(
+        Guid scheduleId,
+        IEnumerable<Guid> scheduleSeatIds)
+    {
+        var client = _httpClientFactory.CreateClient("bus-service");
+
+        var response = await client.PostAsJsonAsync(
+            $"api/internal/schedules/{scheduleId}/seats/confirm",
+            scheduleSeatIds);
+
+        response.EnsureSuccessStatusCode();
     }
 
     public async Task ReleaseScheduleSeatsAsync(

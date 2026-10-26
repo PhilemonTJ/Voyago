@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Voyago.BusService.Data;
 using Voyago.BusService.DTOs.ScheduleSeats;
 using Voyago.BusService.Models;
@@ -9,6 +9,8 @@ namespace Voyago.BusService.Services;
 
 public class ScheduleSeatService : IScheduleSeatService
 {
+    private static readonly TimeSpan HoldDuration = TimeSpan.FromMinutes(10);
+
     private readonly BusDbContext _db;
 
     public ScheduleSeatService(BusDbContext db)
@@ -201,18 +203,22 @@ public class ScheduleSeatService : IScheduleSeatService
                     "One or more requested seats are inactive.");
             }
 
+            var now = DateTimeOffset.UtcNow;
+
             if (scheduleSeats.Any(scheduleSeat =>
-                scheduleSeat.Status != ScheduleSeatStatus.Available))
+                scheduleSeat.Status == ScheduleSeatStatus.Booked ||
+                scheduleSeat.Status == ScheduleSeatStatus.Blocked ||
+                (scheduleSeat.Status == ScheduleSeatStatus.Held &&
+                 scheduleSeat.HeldUntil > now)))
             {
                 throw new InvalidOperationException(
                     "One or more requested seats are no longer available.");
             }
 
-            var now = DateTimeOffset.UtcNow;
-
             foreach (var scheduleSeat in scheduleSeats)
             {
-                scheduleSeat.Status = ScheduleSeatStatus.Booked;
+                scheduleSeat.Status = ScheduleSeatStatus.Held;
+                scheduleSeat.HeldUntil = now.Add(HoldDuration);
                 scheduleSeat.UpdatedAt = now;
             }
 
@@ -325,6 +331,108 @@ public class ScheduleSeatService : IScheduleSeatService
             await _db.SaveChangesAsync();
 
             await transaction.CommitAsync();
+        });
+    }
+
+    public async Task<List<ScheduleSeatInfo>> ConfirmForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds)
+    {
+        var seatIds = scheduleSeatIds
+            .Distinct()
+            .OrderBy(id => id)
+            .ToList();
+
+        if (seatIds.Count == 0)
+        {
+            throw new ArgumentException(
+                "At least one schedule seat is required.",
+                nameof(scheduleSeatIds));
+        }
+
+        var strategy = _db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
+
+            var schedule = await _db.Schedules
+                .FromSqlInterpolated($"""
+                    SELECT *, xmin
+                    FROM "Schedules"
+                    WHERE "Id" = {scheduleId}
+                    FOR UPDATE
+                    """)
+                .SingleOrDefaultAsync();
+
+            if (schedule is null)
+            {
+                throw new KeyNotFoundException(
+                    "Schedule not found.");
+            }
+
+            if (schedule.Status != ScheduleStatus.Scheduled)
+            {
+                throw new InvalidOperationException(
+                    $"Schedule cannot be confirmed because its status is '{schedule.Status}'.");
+            }
+
+            var seats = await _db.ScheduleSeats
+                .FromSqlInterpolated($"""
+                    SELECT *, xmin
+                    FROM "ScheduleSeats"
+                    WHERE "ScheduleId" = {scheduleId}
+                      AND "Id" = ANY({seatIds.ToArray()})
+                    ORDER BY "Id"
+                    FOR UPDATE
+                    """)
+                .Include(scheduleSeat => scheduleSeat.Seat)
+                .ToListAsync();
+
+            if (seats.Count != seatIds.Count)
+            {
+                throw new InvalidOperationException(
+                    "One or more selected seats are invalid.");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+
+            if (seats.Any(scheduleSeat =>
+                scheduleSeat.Status != ScheduleSeatStatus.Held))
+            {
+                throw new InvalidOperationException(
+                    "One or more selected seats cannot be confirmed because they are not held.");
+            }
+
+            if (seats.Any(scheduleSeat =>
+                scheduleSeat.HeldUntil is not null &&
+                scheduleSeat.HeldUntil < now))
+            {
+                throw new InvalidOperationException(
+                    "One or more selected seats can no longer be confirmed because the hold has expired.");
+            }
+
+            foreach (var scheduleSeat in seats)
+            {
+                scheduleSeat.Status = ScheduleSeatStatus.Booked;
+                scheduleSeat.HeldUntil = null;
+                scheduleSeat.UpdatedAt = now;
+            }
+
+            await _db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return seats
+                .Select(scheduleSeat => new ScheduleSeatInfo
+                {
+                    ScheduleSeatId = scheduleSeat.Id,
+                    ScheduleId = scheduleSeat.ScheduleId,
+                    SeatId = scheduleSeat.SeatId,
+                    SeatNumber = scheduleSeat.Seat.SeatNumber,
+                    Price = scheduleSeat.Price,
+                    Status = scheduleSeat.Status.ToString()
+                })
+                .ToList();
         });
     }
 }

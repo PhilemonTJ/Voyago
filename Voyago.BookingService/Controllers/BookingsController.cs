@@ -78,6 +78,28 @@ public class BookingsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPost("{id:guid}/invoice/pay")]
+    [Authorize(Roles = "Passenger")]
+    [ProducesResponseType(StatusCodes.Status428PreconditionRequired)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<BookingResponseDto>> PayInvoice(
+        Guid id,
+        [FromHeader(Name = "If-Match")] string? ifMatch)
+    {
+        if (!ConcurrencyToken.TryReadIfMatch(ifMatch, out var expectedVersion))
+        {
+            return Problem(
+                statusCode: StatusCodes.Status428PreconditionRequired,
+                title: "Precondition required",
+                detail: "Send the current ETag in the If-Match header.");
+        }
+
+        var booking = await _bookingService.PayInvoiceAsync(id, expectedVersion);
+        ConcurrencyToken.SetEtag(Response, booking.Version);
+
+        return Ok(booking);
+    }
+
     [HttpGet("{bookingId:guid}/invoice")]
     [Authorize]
     public async Task<ActionResult<InvoiceResponseDto>> GetInvoice(Guid bookingId)

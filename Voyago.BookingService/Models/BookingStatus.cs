@@ -1,8 +1,9 @@
-﻿namespace Voyago.BookingService.Models;
+namespace Voyago.BookingService.Models;
 
 public enum BookingStatus
 {
     Pending,
     Confirmed,
-    Cancelled
+    Cancelled,
+    Expired
 }

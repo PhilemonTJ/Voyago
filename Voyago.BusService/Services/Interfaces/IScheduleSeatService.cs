@@ -1,4 +1,4 @@
-﻿using Voyago.BusService.DTOs.ScheduleSeats;
+using Voyago.BusService.DTOs.ScheduleSeats;
 using Voyago.Shared.Contracts.Bus;
 
 namespace Voyago.BusService.Services.Interfaces;
@@ -10,6 +10,8 @@ public interface IScheduleSeatService
     Task<List<ScheduleSeatInfo>> GetForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds);
 
     Task<List<ScheduleSeatInfo>> ReserveForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds);
+
+    Task<List<ScheduleSeatInfo>> ConfirmForBookingAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds);
 
     Task ReleaseAsync(Guid scheduleId, IEnumerable<Guid> scheduleSeatIds);
 }

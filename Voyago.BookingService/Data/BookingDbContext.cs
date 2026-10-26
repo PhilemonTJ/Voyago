@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Voyago.BookingService.Models;
 
 namespace Voyago.BookingService.Data;
@@ -93,6 +93,16 @@ public class BookingDbContext : DbContext
 
             entity.Property(invoice => invoice.IssuedAt)
                 .IsRequired();
+
+            entity.Property(invoice => invoice.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20)
+                .IsRequired();
+
+            entity.Property(invoice => invoice.PaidAt);
+
+            entity.Property(invoice => invoice.PaymentMethod)
+                .HasMaxLength(30);
             
             entity.HasOne(invoice => invoice.Booking)
                 .WithOne()

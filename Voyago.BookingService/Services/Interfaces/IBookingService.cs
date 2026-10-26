@@ -1,4 +1,4 @@
-﻿using Voyago.BookingService.DTOs.Bookings;
+using Voyago.BookingService.DTOs.Bookings;
 using Voyago.BookingService.DTOs.Invoices;
 
 namespace Voyago.BookingService.Services.Interfaces;
@@ -12,6 +12,8 @@ public interface IBookingService
     Task<List<BookingSummaryResponseDto>> GetMyBookingsAsync();
 
     Task CancelAsync(Guid bookingId, uint expectedVersion);
+
+    Task<BookingResponseDto> PayInvoiceAsync(Guid bookingId, uint expectedVersion);
 
     Task<InvoiceResponseDto?> GetInvoiceAsync(Guid bookingId);
 }

@@ -39,6 +39,12 @@ namespace Voyago.BookingService.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid>("ScheduleId")
                         .HasColumnType("uuid");
 
@@ -132,6 +138,18 @@ namespace Voyago.BookingService.Migrations
 
                     b.Property<DateTimeOffset>("IssuedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentMethod")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
 

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Voyago.BusService.Models;
 
 namespace Voyago.BusService.Data;
@@ -225,6 +225,8 @@ public class BusDbContext : DbContext
 
             entity.Property(scheduleSeat => scheduleSeat.CreatedAt)
                 .IsRequired();
+
+            entity.Property(scheduleSeat => scheduleSeat.HeldUntil);
 
             entity.HasOne(scheduleSeat => scheduleSeat.Schedule)
                 .WithMany(schedule => schedule.ScheduleSeats)

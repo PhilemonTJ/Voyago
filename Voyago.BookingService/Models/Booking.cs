@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace Voyago.BookingService.Models;
 
@@ -28,6 +28,10 @@ public class Booking
     public DateTimeOffset? UpdatedAt { get; set; }
 
     public DateTimeOffset? CancelledAt { get; set; }
+
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    public DateTimeOffset? PaidAt { get; set; }
 
     public ICollection<BookingSeat> BookingSeats { get; set; } = new List<BookingSeat>();
 }

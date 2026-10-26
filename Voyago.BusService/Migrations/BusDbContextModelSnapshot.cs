@@ -152,6 +152,9 @@ namespace Voyago.BusService.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("HeldUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<decimal>("Price")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");

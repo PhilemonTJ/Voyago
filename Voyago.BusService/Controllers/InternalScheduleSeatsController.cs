@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Voyago.BusService.Services;
 using Voyago.BusService.Services.Interfaces;
 using Voyago.Shared.Contracts.Bus;
@@ -105,6 +105,56 @@ public class InternalScheduleSeatsController : ControllerBase
             return Conflict(new ProblemDetails
             {
                 Title = "Seat reservation conflict",
+                Detail = ex.Message,
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+    }
+
+    [HttpPost("confirm")]
+    public async Task<ActionResult<List<ScheduleSeatInfo>>> Confirm(
+       Guid scheduleId,
+       [FromBody] List<Guid> scheduleSeatIds)
+    {
+        if (scheduleSeatIds is null || scheduleSeatIds.Count == 0)
+        {
+            return Problem(
+                statusCode: StatusCodes.Status400BadRequest,
+                title: "No seats provided.",
+                detail: "At least one schedule seat must be provided.");
+        }
+
+        try
+        {
+            var requestedIds = scheduleSeatIds.Distinct().ToList();
+
+            var seats = await _scheduleSeatService.ConfirmForBookingAsync(scheduleId, requestedIds);
+
+            return Ok(seats);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid confirmation request",
+                Detail = ex.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Schedule not found",
+                Detail = ex.Message,
+                Status = StatusCodes.Status404NotFound
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Seat confirmation conflict",
                 Detail = ex.Message,
                 Status = StatusCodes.Status409Conflict
             });

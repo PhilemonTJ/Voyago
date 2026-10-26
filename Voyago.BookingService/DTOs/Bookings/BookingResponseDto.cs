@@ -1,4 +1,4 @@
-﻿namespace Voyago.BookingService.DTOs.Bookings;
+namespace Voyago.BookingService.DTOs.Bookings;
 
 public class BookingResponseDto
 {
@@ -19,6 +19,10 @@ public class BookingResponseDto
     public DateTimeOffset? UpdatedAt { get; set; }
 
     public DateTimeOffset? CancelledAt { get; set; }
+
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    public DateTimeOffset? PaidAt { get; set; }
 
     public uint Version { get; set; }
 
